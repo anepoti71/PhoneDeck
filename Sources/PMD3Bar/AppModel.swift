@@ -279,6 +279,11 @@ final class AppModel {
         MirrorWindows.shared.toggle(udid)
     }
 
+    func testNotification() {
+        let names = devices.filter(\.reachable).map(\.name).joined(separator: ", ")
+        notify("PMD3Bar", names.isEmpty ? "Le notifiche funzionano." : "Le notifiche funzionano. iPhone collegati: \(names)")
+    }
+
     func setLaunchAtLogin(_ on: Bool) {
         settingsError = LoginItem.set(on)
         launchAtLogin = LoginItem.enabled

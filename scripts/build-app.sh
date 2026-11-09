@@ -31,6 +31,9 @@ echo "==> Assemblo $APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/PMD3Bar"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
+# A new build number on every build: macOS caches app icons (Dock, notifications) per bundle
+# version, so an unchanged CFBundleVersion would keep showing an old icon.
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(date +%Y%m%d%H%M%S)" "$APP/Contents/Info.plist"
 cp "$ROOT/Resources/pmd3bar_helper.py" "$APP/Contents/Resources/pmd3bar_helper.py"
 cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 # -a keeps symlinks (python3 -> python3.12) and permissions

@@ -242,7 +242,8 @@ Se cambi la versione minore di Python (per esempio da 3.12 a 3.13), aggiorna anc
 | "Screen streaming needs iOS 27.0 or later" | iPhone con iOS precedente al 27 | Normale: per quell'iPhone usa gli Strumenti (pulsante 🔧) |
 | Nessuna notifica | Permesso negato, oppure app avviata con `make dev` | Impostazioni di Sistema ▸ Notifiche ▸ PMD3Bar; usa l'app compilata |
 | ⌥⌘M non fa niente | Scorciatoia già usata da un'altra app, oppure disattivata | Menu ▸ Impostazioni: c'è un messaggio rosso se la registrazione è fallita |
-| Icona vecchia o generica in Dock, Finder o notifiche | Cache delle icone di macOS | `make install` registra di nuovo l'app; se non basta: `killall Dock NotificationCenter` |
+| Icona vecchia o generica in Dock o Finder | Cache delle icone di macOS | `make install` registra di nuovo l'app con un numero di build nuovo; se non basta: `killall Dock` |
+| Icona generica solo nelle **notifiche** | Il Centro Notifiche memorizza l'icona **per bundle ID** la prima volta che vede l'app, e non la aggiorna più (il suo database è protetto: non si pulisce né riavviando i processi né cambiando versione) | Unico rimedio: cambiare `CFBundleIdentifier` in `Resources/Info.plist`, migrando le impostazioni come fa `migrateLegacyDefaults()` in `PMD3BarApp.swift`. Già fatto una volta (`local.experiments.PMD3Bar` → `local.pmd3bar.PMD3Bar`). Per non ricaderci: cambia l'icona *prima* della prima notifica |
 | La mappa della Posizione non mostra dove si trova l'iPhone | Non si può leggere la posizione reale dell'iPhone (vedi README, Limiti noti) | La mappa parte dal Mac ("Questo Mac") o dall'ultima posizione simulata; il pulsante ◎ centra sul Mac |
 | "Posizione del Mac non disponibile" | Permesso di localizzazione negato a PMD3Bar | Impostazioni di Sistema ▸ Privacy e sicurezza ▸ Localizzazione ▸ PMD3Bar |
 | Icone delle app mancanti | Cache vuota o iPhone non raggiungibile durante il caricamento | Pulsante ↻ nel pannello App; cache in `~/Library/Caches/PMD3Bar/icons` (si può cancellare) |
@@ -261,6 +262,10 @@ Se cambi la versione minore di Python (per esempio da 3.12 a 3.13), aggiorna anc
    licenza GPL e con il codice sorgente.
 
 ## 10. Cambiare l'icona
+
+> Il Centro Notifiche tiene per sempre la prima icona che vede per un bundle ID. Dock e Finder si
+> aggiornano con `make install`; per le notifiche vedi la riga dedicata in
+> [Problemi frequenti](#8-problemi-frequenti).
 
 L'icona dell'app (Dock, Finder, Cmd-Tab, notifiche, Spotlight) nasce da `Resources/AppIcon-source.png`:
 un'immagine quadrata con il disegno su sfondo uniforme scuro.

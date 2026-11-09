@@ -13,14 +13,22 @@ let runningAsAppBundle: Bool = Bundle.main.bundleIdentifier != nil && Bundle.mai
 
 @MainActor
 enum Notifier {
-    private static var authorized = false
-    private static var requested = false
+    private enum Auth { case unknown, asking, granted, denied }
+    private static var auth: Auth = .unknown
+    /// Notifications posted while the permission prompt is still open, sent once it is granted.
+    private static var pending: [UNNotificationRequest] = []
 
     static func requestAuthorization() {
-        guard runningAsAppBundle, !requested else { return }
-        requested = true
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
-            Task { @MainActor in authorized = granted }
+        guard runningAsAppBundle, auth == .unknown else { return }
+        auth = .asking
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+            Task { @MainActor in
+                auth = granted ? .granted : .denied
+                if let error { PMD3.log("Permesso notifiche: \(error.localizedDescription)") }
+                let queued = pending
+                pending.removeAll()
+                if granted { queued.forEach { UNUserNotificationCenter.current().add($0) } }
+            }
         }
     }
 
@@ -28,13 +36,17 @@ enum Notifier {
     static func post(_ title: String, _ body: String = "", enabled: Bool) {
         PMD3.log("Notifica: \(title) \(body)")
         guard enabled, runningAsAppBundle else { return }
-        requestAuthorization()
-        guard authorized else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
+        switch auth {
+        case .granted: UNUserNotificationCenter.current().add(request)
+        case .denied: break
+        case .unknown, .asking:
+            pending.append(request)
+            requestAuthorization()
+        }
     }
 }
 

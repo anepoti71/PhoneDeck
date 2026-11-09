@@ -5,11 +5,15 @@ struct PMD3BarApp: App {
     @State private var model: AppModel
 
     init() {
+        Self.migrateLegacyDefaults()
         let model = AppModel()
         _model = State(initialValue: model)
         MirrorWindows.shared.model = model
         // `open PMD3Bar.app --args --open <UDID>` starts mirroring that iPhone in its window at launch.
         let args = CommandLine.arguments
+        if args.contains("--test-notification") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { model.testNotification() }
+        }
         if let i = args.firstIndex(of: "--open"), i + 1 < args.count {
             let udid = args[i + 1]
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { MirrorWindows.shared.show(udid) }
@@ -23,6 +27,20 @@ struct PMD3BarApp: App {
             Image(nsImage: MenuBarIcon.image(menuIconState))
         }
         .menuBarExtraStyle(.window)
+    }
+
+    /// Until 0.1 the bundle id was `local.experiments.PMD3Bar`. It changed because Notification Center
+    /// had cached the generic icon for it for good. Copy the old settings over once.
+    private static func migrateLegacyDefaults() {
+        let legacy = "local.experiments.PMD3Bar"
+        let defaults = UserDefaults.standard
+        guard Bundle.main.bundleIdentifier != legacy, !defaults.bool(forKey: "migratedFromLegacyBundleID"),
+              let old = defaults.persistentDomain(forName: legacy) else { return }
+        for (key, value) in old where defaults.object(forKey: key) == nil {
+            defaults.set(value, forKey: key)
+        }
+        defaults.set(true, forKey: "migratedFromLegacyBundleID")
+        PMD3.log("Impostazioni migrate da \(legacy) (\(old.count) chiavi)")
     }
 
     private var menuIconState: MenuBarIcon.State {
@@ -139,7 +157,12 @@ struct MenuView: View {
         DisclosureGroup("Impostazioni", isExpanded: $settingsExpanded) {
             VStack(alignment: .leading, spacing: 6) {
                 Toggle("Monta la Developer Disk Image appena colleghi un iPhone", isOn: $model.autoMountDDI)
-                Toggle("Notifiche (collegamento, montaggio, installazioni, errori)", isOn: $model.notificationsEnabled)
+                HStack {
+                    Toggle("Notifiche (collegamento, montaggio, installazioni, errori)", isOn: $model.notificationsEnabled)
+                    Button("Prova") { model.testNotification() }
+                        .controlSize(.small)
+                        .disabled(!model.notificationsEnabled)
+                }
                 Toggle("Scorciatoia ⌥⌘M: mostra/nascondi la finestra dell'iPhone selezionato", isOn: $model.hotKeyEnabled)
                 if LoginItem.available {
                     Toggle("Avvia al login", isOn: Binding(

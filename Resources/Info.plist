@@ -7,7 +7,7 @@
     <key>CFBundleDisplayName</key>
     <string>PMD3Bar</string>
     <key>CFBundleIdentifier</key>
-    <string>local.experiments.PMD3Bar</string>
+    <string>local.pmd3bar.PMD3Bar</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleExecutable</key>
