@@ -15,7 +15,7 @@ public struct Device: Identifiable, Hashable, Sendable {
     public var hasUSB: Bool { connections.contains("USB") }
 
     public var connectionLabel: String {
-        guard reachable else { return "non raggiungibile" }
+        guard reachable else { return "unreachable" }
         return connections.sorted().map { $0 == "Network" ? "Wi-Fi" : $0 }.joined(separator: " + ")
     }
 

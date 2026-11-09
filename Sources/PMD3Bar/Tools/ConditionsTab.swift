@@ -13,11 +13,11 @@ struct ConditionsTab: View {
                 status
                 Spacer()
                 if case .active = tool.state {
-                    Button("Disattiva") { tool.deactivate() }
+                    Button("Deactivate") { tool.deactivate() }
                 } else if case .starting = tool.state {
-                    Button("Annulla") { tool.deactivate() }
+                    Button("Cancel") { tool.deactivate() }
                 }
-                Button { Task { await tool.refresh() } } label: { Image(systemName: "arrow.clockwise") }.help("Aggiorna")
+                Button { Task { await tool.refresh() } } label: { Image(systemName: "arrow.clockwise") }.help("Refresh")
             }
             if let err = tool.error { Text(err).font(.caption).foregroundStyle(.red) }
             List {
@@ -30,7 +30,7 @@ struct ConditionsTab: View {
                                 if isCurrent(profile) {
                                     Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                                 } else {
-                                    Button("Attiva") { tool.activate(profile) }
+                                    Button("Activate") { tool.activate(profile) }
                                         .controlSize(.small)
                                         .disabled(isStarting)
                                 }
@@ -41,7 +41,7 @@ struct ConditionsTab: View {
                 }
             }
             .overlay { if tool.loading && tool.groups.isEmpty { ProgressView() } }
-            Text("Una condizione alla volta. Resta attiva finché la finestra è aperta; chiudendola l'iPhone torna normale.")
+            Text("One condition at a time. It stays active while the window is open; closing it returns the iPhone to normal.")
                 .font(.caption2).foregroundStyle(.secondary)
         }
         .padding(10)
@@ -50,9 +50,9 @@ struct ConditionsTab: View {
 
     private static func title(_ g: ConditionsTool.Group) -> String {
         switch g.identifier {
-        case "SlowNetworkCondition": return "Rete"
-        case "ThermalCondition": return "Stato termico"
-        case "GPUPerformanceState": return "Prestazioni GPU"
+        case "SlowNetworkCondition": return "Network"
+        case "ThermalCondition": return "Thermal state"
+        case "GPUPerformanceState": return "GPU performance"
         default: return g.name
         }
     }
@@ -68,8 +68,8 @@ struct ConditionsTab: View {
 
     @ViewBuilder private var status: some View {
         switch tool.state {
-        case .off: Label("Nessuna condizione", systemImage: "circle").foregroundStyle(.secondary).font(.caption)
-        case .starting(let p): Label("Attivo \(p.name)…", systemImage: "hourglass").font(.caption)
+        case .off: Label("No condition", systemImage: "circle").foregroundStyle(.secondary).font(.caption)
+        case .starting(let p): Label("Activating \(p.name)…", systemImage: "hourglass").font(.caption)
         case .active(let p): Label(p.name, systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.caption)
         case .failed(let msg): Text(msg).foregroundStyle(.red).font(.caption).lineLimit(2)
         }

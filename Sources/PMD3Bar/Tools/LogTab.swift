@@ -8,23 +8,23 @@ struct LogTab: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack {
-                TextField("Processo (es. SpringBoard)", text: $tools.logProcessFilter).textFieldStyle(.roundedBorder)
-                TextField("Testo", text: $tools.logTextFilter).textFieldStyle(.roundedBorder)
+                TextField("Process (e.g. SpringBoard)", text: $tools.logProcessFilter).textFieldStyle(.roundedBorder)
+                TextField("Text", text: $tools.logTextFilter).textFieldStyle(.roundedBorder)
             }
             .onSubmit { tools.startLog() }
             HStack {
                 if tools.logRunning {
-                    Button { tools.stopLog() } label: { Label("Ferma", systemImage: "pause.fill") }
+                    Button { tools.stopLog() } label: { Label("Stop", systemImage: "pause.fill") }
                 } else {
-                    Button { tools.startLog() } label: { Label("Avvia", systemImage: "play.fill") }
+                    Button { tools.startLog() } label: { Label("Start", systemImage: "play.fill") }
                 }
                 Toggle("Info", isOn: $tools.logIncludeInfo).toggleStyle(.checkbox)
-                    .help("Includi i messaggi di livello Info (molto più numerosi)")
-                Toggle("Scorri", isOn: $autoScroll).toggleStyle(.checkbox)
+                    .help("Include Info-level messages (far more numerous)")
+                Toggle("Scroll", isOn: $autoScroll).toggleStyle(.checkbox)
                 Spacer()
                 Button { tools.exportLog() } label: { Image(systemName: "square.and.arrow.down") }
-                    .help("Esporta in Download").disabled(tools.logEntries.isEmpty)
-                Button { tools.clearLog() } label: { Image(systemName: "trash") }.help("Svuota")
+                    .help("Export to Downloads").disabled(tools.logEntries.isEmpty)
+                Button { tools.clearLog() } label: { Image(systemName: "trash") }.help("Clear")
             }
             ScrollViewReader { proxy in
                 List(tools.logEntries) { e in
@@ -42,7 +42,7 @@ struct LogTab: View {
                     if autoScroll, let last { proxy.scrollTo(last, anchor: .bottom) }
                 }
             }
-            Text("Filtri applicati con Invio o Avvia. Ultime 2000 righe.")
+            Text("Filters apply on Return or Start. Last 2000 lines.")
                 .font(.caption2).foregroundStyle(.secondary)
         }
         .padding(10)

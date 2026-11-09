@@ -2,8 +2,8 @@ import SwiftUI
 import PMD3BarCore
 
 enum ToolTab: String, CaseIterable, Identifiable {
-    case apps = "App", files = "File", location = "Posizione", conditions = "Condizioni",
-         processes = "Processi", crashes = "Crash", log = "Log"
+    case apps = "Apps", files = "Files", location = "Location", conditions = "Conditions",
+         processes = "Processes", crashes = "Crashes", log = "Log"
     var id: String { rawValue }
     var icon: String {
         switch self {
@@ -22,7 +22,7 @@ enum ToolTab: String, CaseIterable, Identifiable {
 
 /// First level of the tools menu: developer tools are grouped under one entry.
 enum ToolGroup: String, CaseIterable, Identifiable {
-    case apps = "App", files = "File", location = "Posizione", developer = "Developer"
+    case apps = "Apps", files = "Files", location = "Location", developer = "Developer"
     var id: String { rawValue }
     var icon: String {
         switch self {
@@ -108,9 +108,9 @@ struct NeedsDDI: View {
         if model.mountStates[udid] == .notMounted {
             HStack {
                 Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
-                Text("Serve la Developer Disk Image").font(.caption)
+                Text("Developer Disk Image needed").font(.caption)
                 Spacer()
-                Button("Monta") { Task { await model.mount(udid) } }
+                Button("Mount") { Task { await model.mount(udid) } }
             }
         }
     }

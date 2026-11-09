@@ -18,7 +18,7 @@ struct LocationTab: View {
     private var mac: MacLocation { MacLocation.shared }
 
     private static let presets: [(String, Double, Double)] = [
-        ("Roma", 41.9028, 12.4964), ("Milano", 45.4642, 9.1900), ("Londra", 51.5074, -0.1278),
+        ("Rome", 41.9028, 12.4964), ("Milan", 45.4642, 9.1900), ("London", 51.5074, -0.1278),
         ("New York", 40.7128, -74.0060), ("Cupertino", 37.3349, -122.0090), ("Tokyo", 35.6762, 139.6503),
     ]
 
@@ -27,16 +27,16 @@ struct LocationTab: View {
             if model.mountStates[udid] == .notMounted {
                 HStack {
                     Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
-                    Text("Serve la Developer Disk Image").font(.caption)
+                    Text("Developer Disk Image needed").font(.caption)
                     Spacer()
-                    Button("Monta") { Task { await model.mount(udid) } }
+                    Button("Mount") { Task { await model.mount(udid) } }
                 }
             }
             HStack {
-                TextField("Cerca un luogo", text: $search).textFieldStyle(.roundedBorder).onSubmit { geocode() }
+                TextField("Search for a place", text: $search).textFieldStyle(.roundedBorder).onSubmit { geocode() }
                 Button { centerOnMac() } label: { Image(systemName: "location.circle") }
-                    .help("Centra sulla posizione del Mac (vicino all'iPhone)")
-                Menu("Città") {
+                    .help("Center on the Mac's location (near the iPhone)")
+                Menu("Cities") {
                     ForEach(Self.presets, id: \.0) { p in
                         Button(p.0) { choose(CLLocationCoordinate2D(latitude: p.1, longitude: p.2), zoom: true) }
                     }
@@ -46,13 +46,13 @@ struct LocationTab: View {
             MapReader { proxy in
                 Map(position: $position) {
                     if let c = mac.coordinate {
-                        Annotation("Questo Mac", coordinate: c) {
+                        Annotation("This Mac", coordinate: c) {
                             Image(systemName: "laptopcomputer").font(.caption).padding(4)
                                 .background(.gray, in: Circle()).foregroundStyle(.white)
                         }
                     }
                     if let last = tools.lastSimulated, !isActive {
-                        Marker("Ultima simulata", systemImage: "clock.arrow.circlepath", coordinate: last).tint(.gray)
+                        Marker("Last simulated", systemImage: "clock.arrow.circlepath", coordinate: last).tint(.gray)
                     }
                     if let pin { Marker("", coordinate: pin).tint(.red) }
                     if case .active(let c) = tools.locationState {
@@ -68,22 +68,22 @@ struct LocationTab: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .frame(minHeight: 260)
             HStack {
-                TextField("Latitudine", text: $latText).textFieldStyle(.roundedBorder)
-                TextField("Longitudine", text: $lonText).textFieldStyle(.roundedBorder)
+                TextField("Latitude", text: $latText).textFieldStyle(.roundedBorder)
+                TextField("Longitude", text: $lonText).textFieldStyle(.roundedBorder)
             }
             HStack {
-                Button("Imposta posizione") {
+                Button("Set location") {
                     if let c = coordinateFromFields() { tools.setLocation(c) }
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(coordinateFromFields() == nil || tools.locationState == .starting)
-                Button("Ripristina reale") { Task { await tools.clearLocation() } }
+                Button("Restore real") { Task { await tools.clearLocation() } }
                     .disabled(tools.locationState == .off)
                 Spacer()
                 locationStatus
             }
             macStatus
-            Text("Clic sulla mappa per scegliere il punto. La posizione resta simulata finché la finestra è aperta; chiudendola torna quella reale. L'iPhone non comunica al Mac la sua posizione reale: la mappa parte dal Mac, che è vicino, o dall'ultima posizione simulata.")
+            Text("Click the map to pick a point. The location stays simulated while the window is open; closing it restores the real one. The iPhone does not tell the Mac its real location: the map starts from the Mac, which is nearby, or from the last simulated location.")
                 .font(.caption2).foregroundStyle(.secondary)
         }
         .padding(10)
@@ -102,12 +102,12 @@ struct LocationTab: View {
     @ViewBuilder private var macStatus: some View {
         switch mac.status {
         case .denied:
-            Text("Posizione del Mac non disponibile: consentila in Impostazioni di Sistema ▸ Privacy e sicurezza ▸ Localizzazione ▸ PMD3Bar.")
+            Text("Mac location unavailable: allow it in System Settings ▸ Privacy & Security ▸ Location Services ▸ PMD3Bar.")
                 .font(.caption2).foregroundStyle(.orange)
         case .failed(let msg):
-            Text("Posizione del Mac non disponibile (\(msg)).").font(.caption2).foregroundStyle(.orange)
+            Text("Mac location unavailable (\(msg)).").font(.caption2).foregroundStyle(.orange)
         case .locating:
-            Label("Cerco la posizione del Mac…", systemImage: "location").font(.caption2).foregroundStyle(.secondary)
+            Label("Finding the Mac's location…", systemImage: "location").font(.caption2).foregroundStyle(.secondary)
         default:
             EmptyView()
         }
@@ -139,7 +139,7 @@ struct LocationTab: View {
         switch tools.locationState {
         case .off: EmptyView()
         case .starting: ProgressView().controlSize(.small)
-        case .active: Label("Attiva", systemImage: "location.fill").foregroundStyle(.blue).font(.caption)
+        case .active: Label("Active", systemImage: "location.fill").foregroundStyle(.blue).font(.caption)
         case .failed(let msg): Text(msg).font(.caption).foregroundStyle(.red).lineLimit(2)
         }
     }

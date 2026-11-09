@@ -19,7 +19,7 @@ final class HeldCommand {
     func start(_ args: [String], udid: String, onApplied: @escaping () -> Void, onExit: @escaping (RunResult) -> Void) {
         stop()
         guard let p = try? PMD3.makeProcess(args, udid: udid) else {
-            onExit(RunResult(status: -1, stdout: Data(), stderr: "Python non trovato"))
+            onExit(RunResult(status: -1, stdout: Data(), stderr: "Python not found"))
             return
         }
         let pipe = Pipe()  // the hint goes to stdout, errors to stderr: read both
@@ -132,19 +132,19 @@ final class ConditionsTool {
                    onApplied: { [weak self] in
                        guard let self, self.state == .starting(profile) else { return }
                        self.state = .active(profile)
-                       self.report("Condizione attiva: \(profile.name)", false, false)
+                       self.report("Condition active: \(profile.name)", false, false)
                    },
                    onExit: { [weak self] r in
                        guard let self else { return }
                        self.state = .failed(r.errorSummary)
-                       self.report("Condizione interrotta: \(r.errorSummary)", true, false)
+                       self.report("Condition stopped: \(r.errorSummary)", true, false)
                    })
     }
 
     func deactivate() {
         held.stop()
         state = .off
-        report("Condizione disattivata", false, false)
+        report("Condition deactivated", false, false)
     }
 
     func shutdown() {
@@ -207,9 +207,9 @@ final class ProcessesTool {
     }
 
     func kill(_ proc: Proc) async {
-        report("Chiudo \(proc.name)…", false, true)
+        report("Killing \(proc.name)…", false, true)
         let r = await PMD3.run(["developer", "dvt", "kill", String(proc.pid)], udid: udid, timeout: 60)
-        report(r.ok ? "\(proc.name) chiuso" : "Chiusura fallita: \(r.errorSummary)", !r.ok, false)
+        report(r.ok ? "\(proc.name) killed" : "Kill failed: \(r.errorSummary)", !r.ok, false)
         if r.ok { processes.removeAll { $0.pid == proc.pid } }
     }
 
@@ -274,13 +274,13 @@ final class CrashesTool {
     }
 
     func show(_ e: DeviceTools.FileEntry) async {
-        report("Apro \(e.name)…", false, true)
+        report("Opening \(e.name)…", false, true)
         let r = await PMD3.run(["crash", "parse", fullPath(e)], udid: udid, timeout: 90)
         if r.ok {
             report("", false, false)
             openedReport = (e.name, String(decoding: r.stdout, as: UTF8.self))
         } else {
-            report("Lettura fallita: \(r.errorSummary)", true, false)
+            report("Read failed: \(r.errorSummary)", true, false)
         }
     }
 
@@ -289,20 +289,20 @@ final class CrashesTool {
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         let dest = uniqueURL(downloads.appendingPathComponent("iPhone crash \(stamp)"))
         try? FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
-        report("Scarico \(e.name)…", false, true)
+        report("Downloading \(e.name)…", false, true)
         let r = await PMD3.run(["crash", "pull", dest.path, fullPath(e)], udid: udid, timeout: 600)
         if r.ok {
-            report("\(e.name) salvato in Download", false, false)
+            report("\(e.name) saved to Downloads", false, false)
             NSWorkspace.shared.activateFileViewerSelecting([dest])
         } else {
-            report("Download fallito: \(r.errorSummary)", true, false)
+            report("Download failed: \(r.errorSummary)", true, false)
         }
     }
 
     func delete(_ e: DeviceTools.FileEntry) async {
-        report("Elimino \(e.name)…", false, true)
+        report("Deleting \(e.name)…", false, true)
         let r = await PMD3.runHelper(["crash-rm", fullPath(e)], udid: udid, timeout: 120)
-        report(r.ok ? "\(e.name) eliminato" : "Eliminazione fallita: \(r.errorSummary)", !r.ok, false)
+        report(r.ok ? "\(e.name) deleted" : "Delete failed: \(r.errorSummary)", !r.ok, false)
         await refresh()
     }
 }

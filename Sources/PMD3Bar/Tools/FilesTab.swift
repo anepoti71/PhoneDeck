@@ -10,11 +10,11 @@ struct FilesTab: View {
         VStack(spacing: 8) {
             HStack {
                 Button { Task { await tools.goUp() } } label: { Image(systemName: "chevron.up") }
-                    .disabled(tools.filesPath == "/").help("Cartella superiore")
+                    .disabled(tools.filesPath == "/").help("Parent folder")
                 Text(tools.filesPath).font(.callout.monospaced()).lineLimit(1).truncationMode(.head)
                 Spacer()
-                Button { pickUpload() } label: { Image(systemName: "square.and.arrow.up") }.help("Carica qui")
-                Button { Task { await tools.refreshFiles() } } label: { Image(systemName: "arrow.clockwise") }.help("Aggiorna")
+                Button { pickUpload() } label: { Image(systemName: "square.and.arrow.up") }.help("Upload here")
+                Button { Task { await tools.refreshFiles() } } label: { Image(systemName: "arrow.clockwise") }.help("Refresh")
             }
             .padding(.horizontal, 10).padding(.top, 8)
             if let err = tools.filesError { Text(err).font(.caption).foregroundStyle(.red).padding(.horizontal, 10) }
@@ -33,25 +33,25 @@ struct FilesTab: View {
                     if entry.dir { Task { await tools.openDirectory(tools.path(for: entry)) } }
                 }
                 .contextMenu {
-                    if entry.dir { Button("Apri") { Task { await tools.openDirectory(tools.path(for: entry)) } } }
-                    Button("Scarica in Download") { Task { await tools.download(entry) } }
+                    if entry.dir { Button("Open") { Task { await tools.openDirectory(tools.path(for: entry)) } } }
+                    Button("Save to Downloads") { Task { await tools.download(entry) } }
                     Divider()
-                    Button("Elimina…", role: .destructive) { confirmDelete = entry }
+                    Button("Delete…", role: .destructive) { confirmDelete = entry }
                 }
             }
             .overlay { if tools.filesLoading && tools.files.isEmpty { ProgressView() } }
-            Text("Cartella Media dell'iPhone (foto in DCIM). Doppio clic per aprire, tasto destro per scaricare. Trascina file sulla finestra per copiarli qui.")
+            Text("The iPhone's Media folder (photos in DCIM). Double-click to open, right-click to download. Drop files on the window to copy them here.")
                 .font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 10).padding(.bottom, 8)
         }
         .task { if tools.files.isEmpty { await tools.refreshFiles() } }
-        .confirmationDialog("Eliminare \(confirmDelete?.name ?? "")?", isPresented: .init(
+        .confirmationDialog("Delete \(confirmDelete?.name ?? "")?", isPresented: .init(
             get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })
         ) {
-            Button("Elimina", role: .destructive) {
+            Button("Delete", role: .destructive) {
                 if let e = confirmDelete { Task { await tools.delete(e) } }
             }
         } message: {
-            Text(confirmDelete?.dir == true ? "La cartella e tutto il suo contenuto verranno eliminati dall'iPhone." : "Il file verrà eliminato dall'iPhone.")
+            Text(confirmDelete?.dir == true ? "The folder and all its contents will be deleted from the iPhone." : "The file will be deleted from the iPhone.")
         }
     }
 

@@ -80,14 +80,14 @@ final class MirrorSession: Identifiable {
             try? await Task.sleep(for: .seconds(1))
         }
         if process === p, state == .starting {
-            fail("Il viewer non risponde: vedi il log")
+            fail("The viewer is not responding: see the log")
             p.interrupt()
         }
     }
 
     private func exited(_ p: Process, status: Int32) {
         guard process === p else { return }
-        PMD3.log("serve-web :\(port) terminato (exit \(status))")
+        PMD3.log("serve-web :\(port) exited (exit \(status))")
         process = nil
         if restartPending {
             restartPending = false
@@ -100,13 +100,13 @@ final class MirrorSession: Identifiable {
         case .running where autoRestartsLeft > 0 && isDeviceReachable():
             // Unexpected exit (e.g. the link changed under it): try once more on whatever link is up now.
             autoRestartsLeft -= 1
-            PMD3.log("serve-web :\(port) uscito inaspettatamente: riavvio automatico")
+            PMD3.log("serve-web :\(port) exited unexpectedly: restarting automatically")
             state = .starting
             Task {
                 try? await Task.sleep(for: .seconds(2))
                 if process == nil, state == .starting { state = .stopped; start(userInitiated: false) }
             }
-        default: fail("Mirroring terminato (exit \(status)): vedi il log")
+        default: fail("Mirroring ended (exit \(status)): see the log")
         }
     }
 

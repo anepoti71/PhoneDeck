@@ -31,7 +31,7 @@ struct MirrorWindowView: View {
         .overlay {
             if dropTargeted {
                 RoundedRectangle(cornerRadius: 12).strokeBorder(Color.accentColor, lineWidth: 4)
-                    .overlay(Text("Rilascia: .ipa per installare, altri file in \(tools.filesPath)")
+                    .overlay(Text("Drop: .ipa to install, other files to \(tools.filesPath)")
                         .padding(8).background(.regularMaterial, in: Capsule()))
                     .padding(6)
             }
@@ -74,10 +74,10 @@ struct MirrorWindowView: View {
             placeholder {
                 VStack(spacing: 12) {
                     Image(systemName: "rectangle.slash").font(.system(size: 40)).foregroundStyle(.secondary)
-                    Text("Il mirroring dello schermo richiede iOS \(Device.mirrorMinimumIOS) o successivo.\nQuesto iPhone ha iOS \(device?.productVersion ?? "?").")
+                    Text("Screen mirroring needs iOS \(Device.mirrorMinimumIOS) or later.\nThis iPhone has iOS \(device?.productVersion ?? "?").")
                         .multilineTextAlignment(.center)
-                    Text("App, file, posizione e log funzionano: usa gli Strumenti.").font(.caption).foregroundStyle(.secondary)
-                    Button("Mostra Strumenti") { showTools = true }
+                    Text("Apps, files, location and developer tools work: use Tools.").font(.caption).foregroundStyle(.secondary)
+                    Button("Show Tools") { showTools = true }
                 }
                 .padding()
             }
@@ -91,15 +91,15 @@ struct MirrorWindowView: View {
         case .running:
             ViewerWebView(url: session.viewerURL, generation: session.generation, controller: viewer)
         case .starting:
-            placeholder { ProgressView("Avvio del mirroring…").controlSize(.large) }
+            placeholder { ProgressView("Starting mirroring…").controlSize(.large) }
         case .stopping:
-            placeholder { ProgressView("Arresto…") }
+            placeholder { ProgressView("Stopping…") }
         case .stopped:
             placeholder {
                 VStack(spacing: 12) {
                     Image(systemName: "iphone.slash").font(.system(size: 44)).foregroundStyle(.secondary)
-                    Text("Mirroring fermo")
-                    Button("Avvia") { session.start() }.disabled(device?.reachable != true)
+                    Text("Mirroring stopped")
+                    Button("Start") { session.start() }.disabled(device?.reachable != true)
                 }
             }
         case .failed(let msg):
@@ -108,10 +108,10 @@ struct MirrorWindowView: View {
                     Image(systemName: "exclamationmark.triangle").font(.system(size: 40)).foregroundStyle(.orange)
                     Text(msg).multilineTextAlignment(.center).padding(.horizontal)
                     if model.mountStates[udid] == .notMounted {
-                        Button("Monta Developer Disk Image") { Task { await model.mount(udid) } }
+                        Button("Mount Developer Disk Image") { Task { await model.mount(udid) } }
                     }
                     HStack {
-                        Button("Riprova") { session.start() }
+                        Button("Retry") { session.start() }
                         Button("Log") { model.openLog() }
                     }
                 }
@@ -127,41 +127,41 @@ struct MirrorWindowView: View {
         ToolbarItemGroup {
             switch viewer.recording {
             case .idle:
-                Button { viewer.startRecording() } label: { Label("Registra", systemImage: "record.circle") }
-                    .help("Registra lo schermo, con l'audio dell'iPhone, in Download")
+                Button { viewer.startRecording() } label: { Label("Record", systemImage: "record.circle") }
+                    .help("Record the screen, with the iPhone's audio, to Downloads")
                     .disabled(session.state != .running || !mirroringSupported)
             case .recording(let since):
                 Button { viewer.stopRecording() } label: {
                     Label {
-                        Text("Ferma registrazione")
+                        Text("Stop recording")
                     } icon: {
                         Image(systemName: "stop.circle.fill").foregroundStyle(.red)
                     }
                 }
-                .help("Registrazione in corso da \(since.formatted(date: .omitted, time: .standard))")
+                .help("Recording since \(since.formatted(date: .omitted, time: .standard))")
             case .saving:
                 ProgressView().controlSize(.small)
             }
-            Button { NSWorkspace.shared.open(session.viewerURL) } label: { Label("Apri nel browser", systemImage: "safari") }
+            Button { NSWorkspace.shared.open(session.viewerURL) } label: { Label("Open in browser", systemImage: "safari") }
                 .disabled(session.state != .running)
             if !mirroringSupported {
                 EmptyView()
             } else if session.isActive {
-                Button { session.stop() } label: { Label("Ferma", systemImage: "stop.fill") }
+                Button { session.stop() } label: { Label("Stop", systemImage: "stop.fill") }
             } else {
-                Button { session.start() } label: { Label("Avvia", systemImage: "play.fill") }
+                Button { session.start() } label: { Label("Start", systemImage: "play.fill") }
                     .disabled(device?.reachable != true)
             }
             Button { viewer.deviceOnly.toggle() } label: {
-                Label(viewer.deviceOnly ? "Mostra controlli" : "Solo iPhone",
+                Label(viewer.deviceOnly ? "Show controls" : "iPhone only",
                       systemImage: viewer.deviceOnly ? "slider.horizontal.3" : "iphone")
             }
             .help(viewer.deviceOnly
-                  ? "Mostra i controlli del viewer: zoom, rotazione, tasti, appunti, accessibilità"
-                  : "Mostra solo l'iPhone")
+                  ? "Show the viewer controls: zoom, rotation, buttons, clipboard, accessibility"
+                  : "Show only the iPhone")
             .disabled(!mirroringSupported)
-            Button { showTools.toggle() } label: { Label("Strumenti", systemImage: "sidebar.right") }
-                .help("App, file, posizione e log")
+            Button { showTools.toggle() } label: { Label("Tools", systemImage: "sidebar.right") }
+                .help("Apps, files, location and developer tools")
         }
     }
 

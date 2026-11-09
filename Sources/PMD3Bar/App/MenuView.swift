@@ -23,24 +23,24 @@ struct MenuView: View {
 
     @ViewBuilder private var deviceSection: some View {
         if PMD3.python == nil {
-            Label("Python con pymobiledevice3 non trovato. Esegui `make python`.", systemImage: "exclamationmark.triangle")
+            Label("Python with pymobiledevice3 not found. Run `make python`.", systemImage: "exclamationmark.triangle")
                 .foregroundStyle(.red)
         } else if model.devices.isEmpty {
             noDevice
         } else {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Dispositivi (\(model.devices.count))").font(.caption).foregroundStyle(.secondary)
+                Text("Devices (\(model.devices.count))").font(.caption).foregroundStyle(.secondary)
                 ForEach(model.devices) { device in
                     row(device)
                 }
             }
             HStack {
                 if model.devices.filter({ $0.reachable && $0.supportsMirroring }).count > 1 {
-                    Button("Tutti in griglia") { MirrorWindows.shared.showGrid() }
-                        .help("Una finestra con tutti gli iPhone affiancati")
+                    Button("All in grid") { MirrorWindows.shared.showGrid() }
+                        .help("One window with all iPhones side by side")
                 }
                 if model.activeSessions.count > 1 {
-                    Button("Ferma tutti") { for s in model.activeSessions { s.stop() } }
+                    Button("Stop all") { for s in model.activeSessions { s.stop() } }
                 }
             }
             .font(.caption)
@@ -49,11 +49,11 @@ struct MenuView: View {
 
     private var noDevice: some View {
         let hint = model.deviceError
-            ?? "Collega l'iPhone via USB (la prima volta serve il cavo per l'abbinamento) oppure sbloccalo sulla stessa rete Wi-Fi."
+            ?? "Connect the iPhone via USB (the first time the cable is needed for pairing) or unlock it on the same Wi-Fi network."
         return HStack(spacing: 10) {
             Image(systemName: "iphone.slash").font(.title2).foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Nessun dispositivo").font(.headline)
+                Text("No devices").font(.headline)
                 Text(hint).font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -82,7 +82,7 @@ struct MenuView: View {
             mountButton
         }
         if model.mountState == .notMounted {
-            Text("Serve per mirroring, posizione simulata e avvio app.")
+            Text("Needed for mirroring, simulated location and launching apps.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -94,7 +94,7 @@ struct MenuView: View {
         case .mounted:
             EmptyView()
         default:
-            Button("Monta") { Task { await model.mount() } }
+            Button("Mount") { Task { await model.mount() } }
                 .disabled(model.selectedDevice?.reachable != true)
         }
     }
@@ -102,10 +102,10 @@ struct MenuView: View {
     @ViewBuilder private var mountStatus: some View {
         switch model.mountState {
         case .unknown: status("—", .secondary)
-        case .checking: status("Verifica…", .secondary)
-        case .mounted: status("Montata", .green)
-        case .notMounted: status("Non montata", .orange)
-        case .mounting: status("Montaggio in corso…", .secondary)
+        case .checking: status("Checking…", .secondary)
+        case .mounted: status("Mounted", .green)
+        case .notMounted: status("Not mounted", .orange)
+        case .mounting: status("Mounting…", .secondary)
         case .failed(let msg): status(msg, .red)
         }
     }
@@ -113,26 +113,26 @@ struct MenuView: View {
     @AppStorage("settingsExpanded") private var settingsExpanded = false
 
     private var settings: some View {
-        DisclosureGroup("Impostazioni", isExpanded: $settingsExpanded) {
+        DisclosureGroup("Settings", isExpanded: $settingsExpanded) {
             VStack(alignment: .leading, spacing: 6) {
-                Toggle("Monta la Developer Disk Image appena colleghi un iPhone", isOn: $model.autoMountDDI)
+                Toggle("Mount the Developer Disk Image as soon as an iPhone connects", isOn: $model.autoMountDDI)
                 HStack {
-                    Toggle("Notifiche (collegamento, montaggio, installazioni, errori)", isOn: $model.notificationsEnabled)
-                    Button("Prova") { model.testNotification() }
+                    Toggle("Notifications (connection, mount, installs, errors)", isOn: $model.notificationsEnabled)
+                    Button("Test") { model.testNotification() }
                         .controlSize(.small)
                         .disabled(!model.notificationsEnabled)
                 }
-                Toggle("Scorciatoia ⌥⌘M: mostra/nascondi la finestra dell'iPhone selezionato", isOn: $model.hotKeyEnabled)
+                Toggle("Shortcut ⌥⌘M: show/hide the selected iPhone's window", isOn: $model.hotKeyEnabled)
                 if LoginItem.available {
-                    Toggle("Avvia al login", isOn: Binding(
+                    Toggle("Launch at login", isOn: Binding(
                         get: { model.launchAtLogin }, set: { model.setLaunchAtLogin($0) }))
                 }
                 HStack {
-                    Text("Porta iniziale")
+                    Text("Starting port")
                     TextField("", value: $model.httpPort, format: .number.grouping(.never))
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 70)
-                        .help("Il primo iPhone usa questa porta, gli altri le successive libere")
+                        .help("The first iPhone uses this port, the others the next free ones")
                 }
                 if let err = model.settingsError {
                     Text(err).foregroundStyle(.red)
@@ -149,7 +149,7 @@ struct MenuView: View {
         VStack(alignment: .leading, spacing: 6) {
             settings
             HStack {
-                Button("Aggiorna") {
+                Button("Refresh") {
                     Task {
                         await model.refreshDevices()
                         await model.refreshMount()
@@ -157,21 +157,21 @@ struct MenuView: View {
                 }
                 Button("Log") { model.openLog() }
                 Spacer()
-                Button("Esci") { NSApplication.shared.terminate(nil) }
+                Button("Quit") { NSApplication.shared.terminate(nil) }
             }
             Text("pymobiledevice3 \(model.pmd3Version)")
                 .font(.caption2).foregroundStyle(.tertiary)
             if model.updateAvailable, let latest = model.latestPMD3 {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.up.circle.fill").foregroundStyle(.blue)
-                    Text("Disponibile la \(latest)").font(.caption)
+                    Text("\(latest) available").font(.caption)
                     Spacer()
-                    Button("Novità") { NSWorkspace.shared.open(AppModel.releasesURL) }
-                    Button("Copia comando") {
+                    Button("What's new") { NSWorkspace.shared.open(AppModel.releasesURL) }
+                    Button("Copy command") {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString("PMD3_VERSION=\(latest) make python && make install", forType: .string)
                     }
-                    .help("Da lanciare nella cartella del progetto: installa la nuova versione solo se supera la verifica")
+                    .help("Run it in the project folder: installs the new version only if it passes the check")
                 }
                 .controlSize(.small)
             }
@@ -224,7 +224,7 @@ struct DeviceRow: View {
                 Text(device.name).font(.body.weight(selected ? .semibold : .regular)).lineLimit(1)
                 Text(subtitle).font(.caption).foregroundStyle(detailStyle).lineLimit(2)
                 if let err = device.unreachableError {
-                    Text("Sblocca l'iPhone e verifica la rete Wi-Fi (\(err))")
+                    Text("Unlock the iPhone and check the Wi-Fi network (\(err))")
                         .font(.caption2).foregroundStyle(.secondary).lineLimit(2)
                 }
             }
@@ -237,7 +237,7 @@ struct DeviceRow: View {
         var s = "iOS \(device.productVersion) · \(device.connectionLabel)"
         switch mirrorState {
         case .running: s += " · :\(mirror?.port ?? 0)"
-        case .starting: s += " · avvio…"
+        case .starting: s += " · starting…"
         case .failed(let msg): s += " · \(msg)"
         default: break
         }
@@ -248,19 +248,19 @@ struct DeviceRow: View {
         switch mirrorState {
         case .running:
             Button(action: openWindow) { Image(systemName: "macwindow") }
-                .help("Mostra la finestra")
+                .help("Show window")
             Button(action: stop) { Image(systemName: "stop.fill") }
-                .help("Ferma il mirroring")
+                .help("Stop mirroring")
         case .starting, .stopping:
             ProgressView().controlSize(.small)
         case .stopped, .failed:
             if device.supportsMirroring {
                 Button(action: openWindow) { Image(systemName: "play.fill") }
-                    .help("Avvia il mirroring in una finestra")
+                    .help("Start mirroring in a window")
                     .disabled(!device.reachable)
             } else {
                 Button(action: openWindow) { Image(systemName: "wrench.and.screwdriver") }
-                    .help("Strumenti: app, file, posizione, log (il mirroring richiede iOS \(Device.mirrorMinimumIOS)+)")
+                    .help("Tools: apps, files, location, developer (mirroring needs iOS \(Device.mirrorMinimumIOS)+)")
                     .disabled(!device.reachable)
             }
         }

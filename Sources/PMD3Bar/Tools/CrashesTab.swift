@@ -12,10 +12,10 @@ struct CrashesTab: View {
                 Button { Task { await tool.open((tool.path as NSString).deletingLastPathComponent) } } label: {
                     Image(systemName: "chevron.up")
                 }
-                .disabled(tool.path == "/").help("Cartella superiore")
+                .disabled(tool.path == "/").help("Parent folder")
                 Text(tool.path).font(.callout.monospaced()).lineLimit(1).truncationMode(.head)
                 Spacer()
-                Button { Task { await tool.refresh() } } label: { Image(systemName: "arrow.clockwise") }.help("Aggiorna")
+                Button { Task { await tool.refresh() } } label: { Image(systemName: "arrow.clockwise") }.help("Refresh")
             }
             if let err = tool.error { Text(err).font(.caption).foregroundStyle(.red) }
             List(tool.entries) { e in
@@ -35,17 +35,17 @@ struct CrashesTab: View {
                 }
                 .contextMenu {
                     if e.dir {
-                        Button("Apri") { Task { await tool.open(tool.fullPath(e)) } }
+                        Button("Open") { Task { await tool.open(tool.fullPath(e)) } }
                     } else {
-                        Button("Mostra") { Task { await tool.show(e) } }
+                        Button("Show") { Task { await tool.show(e) } }
                     }
-                    Button("Scarica in Download") { Task { await tool.download(e) } }
+                    Button("Save to Downloads") { Task { await tool.download(e) } }
                     Divider()
-                    Button("Elimina…", role: .destructive) { confirmDelete = e }
+                    Button("Delete…", role: .destructive) { confirmDelete = e }
                 }
             }
             .overlay { if tool.loading && tool.entries.isEmpty { ProgressView() } }
-            Text("Report di crash e diagnostica dell'iPhone, dal più recente. Doppio clic per leggerli.")
+            Text("iPhone crash and diagnostic reports, newest first. Double-click to read them.")
                 .font(.caption2).foregroundStyle(.secondary)
         }
         .padding(10)
@@ -53,12 +53,12 @@ struct CrashesTab: View {
         .sheet(isPresented: .init(get: { tool.openedReport != nil }, set: { if !$0 { tool.openedReport = nil } })) {
             if let rep = tool.openedReport { CrashReportSheet(name: rep.name, text: rep.text) { tool.openedReport = nil } }
         }
-        .confirmationDialog("Eliminare \(confirmDelete?.name ?? "")?", isPresented: .init(
+        .confirmationDialog("Delete \(confirmDelete?.name ?? "")?", isPresented: .init(
             get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })
         ) {
-            Button("Elimina", role: .destructive) { if let e = confirmDelete { Task { await tool.delete(e) } } }
+            Button("Delete", role: .destructive) { if let e = confirmDelete { Task { await tool.delete(e) } } }
         } message: {
-            Text("Il report viene eliminato dall'iPhone.")
+            Text("The report will be deleted from the iPhone.")
         }
     }
 
@@ -74,11 +74,11 @@ struct CrashReportSheet: View {
             HStack {
                 Text(name).font(.headline).lineLimit(1).truncationMode(.middle)
                 Spacer()
-                Button("Copia") {
+                Button("Copy") {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(text, forType: .string)
                 }
-                Button("Chiudi", action: close).keyboardShortcut(.cancelAction)
+                Button("Close", action: close).keyboardShortcut(.cancelAction)
             }
             ScrollView([.vertical, .horizontal]) {
                 Text(text).font(.system(size: 11, design: .monospaced)).textSelection(.enabled)

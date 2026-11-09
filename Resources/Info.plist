@@ -25,10 +25,10 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSLocationUsageDescription</key>
-    <string>PMD3Bar centra la mappa della posizione simulata sul Mac, vicino all'iPhone collegato.</string>
+    <string>PMD3Bar centers the simulated-location map on the Mac, near the connected iPhone.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>PMD3Bar centra la mappa della posizione simulata sul Mac, vicino all'iPhone collegato.</string>
+    <string>PMD3Bar centers the simulated-location map on the Mac, near the connected iPhone.</string>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>PMD3Bar comunica con l'iPhone anche via Wi-Fi e tramite il tunnel di sviluppo iOS.</string>
+    <string>PMD3Bar talks to the iPhone over Wi-Fi too, and through the iOS developer tunnel.</string>
 </dict>
 </plist>

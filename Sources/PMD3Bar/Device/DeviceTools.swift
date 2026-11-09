@@ -96,32 +96,32 @@ final class DeviceTools {
     }
 
     func install(_ url: URL) async {
-        report("Installo \(url.lastPathComponent)…", busy: true)
+        report("Installing \(url.lastPathComponent)…", busy: true)
         let r = await PMD3.run(["apps", "install", url.path], udid: udid, timeout: 900)
         if r.ok {
-            report("\(url.lastPathComponent) installata")
-            notify("App installata", url.lastPathComponent)
+            report("\(url.lastPathComponent) installed")
+            notify("App installed", url.lastPathComponent)
             await refreshApps()
         } else {
-            report("Installazione fallita: \(r.errorSummary)", error: true)
-            notify("Installazione fallita", "\(url.lastPathComponent): \(r.errorSummary)")
+            report("Install failed: \(r.errorSummary)", error: true)
+            notify("Install failed", "\(url.lastPathComponent): \(r.errorSummary)")
         }
     }
 
     func launch(_ app: AppInfo) async {
-        report("Avvio \(app.name)…", busy: true)
+        report("Launching \(app.name)…", busy: true)
         let r = await PMD3.run(["developer", "core-device", "launch-application", app.bundle_id], udid: udid, timeout: 90)
-        report(r.ok ? "\(app.name) avviata" : "Avvio fallito: \(r.errorSummary)", error: !r.ok)
+        report(r.ok ? "\(app.name) launched" : "Launch failed: \(r.errorSummary)", error: !r.ok)
     }
 
     func uninstall(_ app: AppInfo) async {
-        report("Disinstallo \(app.name)…", busy: true)
+        report("Uninstalling \(app.name)…", busy: true)
         let r = await PMD3.run(["apps", "uninstall", app.bundle_id], udid: udid, timeout: 180)
         if r.ok {
-            report("\(app.name) disinstallata")
+            report("\(app.name) uninstalled")
             apps.removeAll { $0.id == app.id }
         } else {
-            report("Disinstallazione fallita: \(r.errorSummary)", error: true)
+            report("Uninstall failed: \(r.errorSummary)", error: true)
         }
     }
 
@@ -172,14 +172,14 @@ final class DeviceTools {
     func upload(_ urls: [URL]) async {
         for url in urls {
             let remote = (filesPath as NSString).appendingPathComponent(url.lastPathComponent)
-            report("Copio \(url.lastPathComponent) su iPhone…", busy: true)
+            report("Copying \(url.lastPathComponent) to iPhone…", busy: true)
             let r = await PMD3.run(["afc", "push", url.path, remote], udid: udid, timeout: 1800)
             if !r.ok {
-                report("Copia fallita: \(r.errorSummary)", error: true)
+                report("Copy failed: \(r.errorSummary)", error: true)
                 return
             }
         }
-        report(urls.count == 1 ? "\(urls[0].lastPathComponent) copiato in \(filesPath)" : "\(urls.count) elementi copiati in \(filesPath)")
+        report(urls.count == 1 ? "\(urls[0].lastPathComponent) copied to \(filesPath)" : "\(urls.count) items copied to \(filesPath)")
         await refreshFiles()
     }
 
@@ -187,20 +187,20 @@ final class DeviceTools {
     func download(_ entry: FileEntry) async {
         let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
         let dest = uniqueURL(downloads.appendingPathComponent(entry.name))
-        report("Scarico \(entry.name)…", busy: true)
+        report("Downloading \(entry.name)…", busy: true)
         let r = await PMD3.run(["afc", "pull", path(for: entry), dest.path], udid: udid, timeout: 1800)
         if r.ok {
-            report("\(entry.name) salvato in Download")
+            report("\(entry.name) saved to Downloads")
             NSWorkspace.shared.activateFileViewerSelecting([dest])
         } else {
-            report("Download fallito: \(r.errorSummary)", error: true)
+            report("Download failed: \(r.errorSummary)", error: true)
         }
     }
 
     func delete(_ entry: FileEntry) async {
-        report("Elimino \(entry.name)…", busy: true)
+        report("Deleting \(entry.name)…", busy: true)
         let r = await PMD3.run(["afc", "rm", path(for: entry)], udid: udid, timeout: 300)
-        report(r.ok ? "\(entry.name) eliminato" : "Eliminazione fallita: \(r.errorSummary)", error: !r.ok)
+        report(r.ok ? "\(entry.name) deleted" : "Delete failed: \(r.errorSummary)", error: !r.ok)
         await refreshFiles()
     }
 
@@ -266,7 +266,7 @@ final class DeviceTools {
             Task { @MainActor in
                 guard let self, self.locationProcess === proc else { return }
                 self.locationProcess = nil
-                PMD3.log("simulate-location set terminato (exit \(status))\n\(text)")
+                PMD3.log("simulate-location set exited (exit \(status))\n\(text)")
                 if case .off = self.locationState { return }
                 self.locationState = .failed(RunResult(status: status, stdout: Data(), stderr: text).errorSummary)
             }
@@ -284,7 +284,7 @@ final class DeviceTools {
                 if String(decoding: box.data, as: UTF8.self).contains("Ctrl+C") {
                     locationState = .active(c)
                     lastSimulated = c
-                    report(String(format: "Posizione simulata: %.5f, %.5f", c.latitude, c.longitude))
+                    report(String(format: "Simulated location: %.5f, %.5f", c.latitude, c.longitude))
                     return
                 }
                 try? await Task.sleep(for: .milliseconds(500))
@@ -297,7 +297,7 @@ final class DeviceTools {
         locationState = .off
         stopLocationProcess()
         let r = await PMD3.run(["developer", "dvt", "simulate-location", "clear"], udid: udid, timeout: 90)
-        report(r.ok ? "Posizione reale ripristinata" : "Ripristino fallito: \(r.errorSummary)", error: !r.ok)
+        report(r.ok ? "Real location restored" : "Restore failed: \(r.errorSummary)", error: !r.ok)
     }
 
     private func stopLocationProcess() {
@@ -428,7 +428,7 @@ final class DeviceTools {
             try text.write(to: url, atomically: true, encoding: .utf8)
             NSWorkspace.shared.activateFileViewerSelecting([url])
         } catch {
-            report("Esportazione fallita: \(error.localizedDescription)", error: true)
+            report("Export failed: \(error.localizedDescription)", error: true)
         }
     }
 

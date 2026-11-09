@@ -140,7 +140,7 @@ final class MirrorWindows: NSObject, NSWindowDelegate {
             contentRect: NSRect(x: 0, y: 0, width: 1100, height: 820),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered, defer: false)
-        w.title = "Tutti gli iPhone"
+        w.title = "All iPhones"
         w.contentViewController = NSHostingController(rootView: GridView(model: model))
         w.isReleasedWhenClosed = false
         w.delegate = self

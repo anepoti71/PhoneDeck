@@ -45,7 +45,7 @@ struct PMD3BarApp: App {
             defaults.set(value, forKey: key)
         }
         defaults.set(true, forKey: "migratedFromLegacyBundleID")
-        PMD3.log("Impostazioni migrate da \(legacy) (\(old.count) chiavi)")
+        PMD3.log("Settings migrated from \(legacy) (\(old.count) keys)")
     }
 
     private var menuIconState: MenuBarIcon.State {

@@ -25,8 +25,8 @@ struct GridView: View {
             if sessions.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "iphone.slash").font(.system(size: 40)).foregroundStyle(.secondary)
-                    Text("Nessun iPhone in mirroring").foregroundStyle(.white)
-                    Text("Servono iPhone con iOS \(Device.mirrorMinimumIOS) o successivo, raggiungibili.")
+                    Text("No iPhone mirroring").foregroundStyle(.white)
+                    Text("Needs reachable iPhones with iOS \(Device.mirrorMinimumIOS) or later.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -45,7 +45,7 @@ struct GridView: View {
                 Text(model.device(s.udid)?.name ?? "iPhone").font(.caption.weight(.semibold))
                 Spacer()
                 Button { MirrorWindows.shared.show(s.udid) } label: { Image(systemName: "macwindow") }
-                    .buttonStyle(.borderless).help("Apri nella sua finestra (con gli Strumenti)")
+                    .buttonStyle(.borderless).help("Open in its own window (with Tools)")
             }
             .foregroundStyle(.white)
             .padding(.horizontal, 10).padding(.top, 6)

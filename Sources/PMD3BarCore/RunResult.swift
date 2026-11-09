@@ -22,6 +22,6 @@ public struct RunResult: Sendable {
             .map { $0.trimmingCharacters(in: boxChars) }
             .filter { !$0.isEmpty && !$0.hasPrefix("Error") && !$0.hasPrefix("Usage") }
         let tail = lines.suffix(2).joined(separator: " ")
-        return tail.isEmpty ? "Comando fallito (exit \(status))" : tail
+        return tail.isEmpty ? "Command failed (exit \(status))" : tail
     }
 }

@@ -25,7 +25,7 @@ enum Notifier {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
             Task { @MainActor in
                 auth = granted ? .granted : .denied
-                if let error { PMD3.log("Permesso notifiche: \(error.localizedDescription)") }
+                if let error { PMD3.log("Notification permission: \(error.localizedDescription)") }
                 let queued = pending
                 pending.removeAll()
                 if granted { queued.forEach { UNUserNotificationCenter.current().add($0) } }
@@ -35,7 +35,7 @@ enum Notifier {
 
     /// Posts a notification if the user enabled them (menu ▸ Impostazioni ▸ Notifiche).
     static func post(_ title: String, _ body: String = "", enabled: Bool) {
-        PMD3.log("Notifica: \(title) \(body)")
+        PMD3.log("Notification: \(title) \(body)")
         guard enabled, runningAsAppBundle else { return }
         let content = UNMutableNotificationContent()
         content.title = title
@@ -126,7 +126,7 @@ final class MacLocation: NSObject, CLLocationManagerDelegate {
 
     /// Asks once for the current position (prompts for permission the first time).
     func refresh() {
-        guard runningAsAppBundle else { status = .failed("disponibile solo nell'app compilata"); return }
+        guard runningAsAppBundle else { status = .failed("available only in the built app"); return }
         switch manager.authorizationStatus {
         case .denied, .restricted:
             status = .denied

@@ -17,10 +17,10 @@ struct AppsTab: View {
     var body: some View {
         VStack(spacing: 8) {
             HStack {
-                TextField("Cerca", text: $search).textFieldStyle(.roundedBorder)
-                Button { pickIPA() } label: { Label("Installa .ipa", systemImage: "plus") }
+                TextField("Search", text: $search).textFieldStyle(.roundedBorder)
+                Button { pickIPA() } label: { Label("Install .ipa", systemImage: "plus") }
                 Button { Task { await tools.refreshApps() } } label: { Image(systemName: "arrow.clockwise") }
-                    .help("Aggiorna")
+                    .help("Refresh")
             }
             .padding(.horizontal, 10).padding(.top, 8)
             if let err = tools.appsError { Text(err).font(.caption).foregroundStyle(.red).padding(.horizontal, 10) }
@@ -41,31 +41,31 @@ struct AppsTab: View {
                     }
                     Spacer()
                     Button { Task { await tools.launch(app) } } label: { Image(systemName: "play.circle") }
-                        .buttonStyle(.borderless).help("Avvia")
+                        .buttonStyle(.borderless).help("Launch")
                 }
                 .contextMenu {
-                    Button("Avvia") { Task { await tools.launch(app) } }
-                    Button("Copia bundle ID") {
+                    Button("Launch") { Task { await tools.launch(app) } }
+                    Button("Copy bundle ID") {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(app.bundle_id, forType: .string)
                     }
                     Divider()
-                    Button("Disinstalla…", role: .destructive) { confirmUninstall = app }
+                    Button("Uninstall…", role: .destructive) { confirmUninstall = app }
                 }
             }
             .overlay { if tools.appsLoading && tools.apps.isEmpty { ProgressView() } }
-            Text("Trascina un .ipa sulla finestra per installarlo. Avvia richiede la Developer Disk Image.")
+            Text("Drop an .ipa on the window to install it. Launch needs the Developer Disk Image.")
                 .font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 10).padding(.bottom, 8)
         }
         .task { if tools.apps.isEmpty { await tools.refreshApps() } }
-        .confirmationDialog("Disinstallare \(confirmUninstall?.name ?? "")?", isPresented: .init(
+        .confirmationDialog("Uninstall \(confirmUninstall?.name ?? "")?", isPresented: .init(
             get: { confirmUninstall != nil }, set: { if !$0 { confirmUninstall = nil } })
         ) {
-            Button("Disinstalla", role: .destructive) {
+            Button("Uninstall", role: .destructive) {
                 if let app = confirmUninstall { Task { await tools.uninstall(app) } }
             }
         } message: {
-            Text("L'app e tutti i suoi dati verranno eliminati dall'iPhone.")
+            Text("The app and all its data will be deleted from the iPhone.")
         }
     }
 

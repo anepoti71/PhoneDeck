@@ -58,7 +58,7 @@ final class AppModel {
     private var signalSources: [DispatchSourceSignal] = []
 
     init() {
-        PMD3.log("PMD3Bar avviato, python: \(PMD3.python.map { "\($0.url.path) (\($0.source.rawValue))" } ?? "non trovato")")
+        PMD3.log("PMD3Bar started, python: \(PMD3.python.map { "\($0.url.path) (\($0.source.rawValue))" } ?? "not found")")
         NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -123,7 +123,7 @@ final class AppModel {
         // Keep devices being mirrored in the list even if they vanish for a moment.
         var merged = list
         for s in activeSessions where !list.contains(where: { $0.id == s.udid }) {
-            if var d = previous[s.udid] { d.connections = []; d.unreachableError = "non visibile"; merged.append(d) }
+            if var d = previous[s.udid] { d.connections = []; d.unreachableError = "not visible"; merged.append(d) }
         }
         if merged != devices { devices = merged }
         for id in mountStates.keys where !merged.contains(where: { $0.id == id }) && mountStates[id] != .mounting {
@@ -144,7 +144,7 @@ final class AppModel {
         // Pulling the cable kills the USB tunnel under a running serve-web: restart it over Wi-Fi.
         for s in activeSessions {
             if let old = previous[s.udid], let new = device(s.udid), old.hasUSB, !new.hasUSB, new.reachable {
-                PMD3.log("Cavo USB scollegato da \(new.name) durante il mirroring: riavvio via Wi-Fi")
+                PMD3.log("USB cable unplugged from \(new.name) while mirroring: restarting over Wi-Fi")
                 s.restart()
             }
         }
@@ -164,7 +164,7 @@ final class AppModel {
             let isNew = !seenBefore.contains(d.id)
             let isBack = announcedGone.remove(d.id) != nil
             if !firstListing && (isNew || isBack) {
-                notify("iPhone collegato", "\(d.name) · \(d.connectionLabel)")
+                notify("iPhone connected", "\(d.name) · \(d.connectionLabel)")
             }
             seenBefore.insert(d.id)
         }
@@ -174,7 +174,7 @@ final class AppModel {
             if now.timeIntervalSince(since) >= 20, !announcedGone.contains(id) {
                 announcedGone.insert(id)
                 autoMountTried.remove(id)  // next connection may need a new mount (e.g. after a reboot)
-                notify("iPhone scollegato", knownNames[id] ?? id)
+                notify("iPhone disconnected", knownNames[id] ?? id)
             }
         }
     }
@@ -195,7 +195,7 @@ final class AppModel {
         if autoMountDDI, mountStates[udid] == .notMounted, device(udid)?.reachable == true,
            !autoMountTried.contains(udid) {
             autoMountTried.insert(udid)
-            PMD3.log("Montaggio automatico della DDI su \(device(udid)?.name ?? udid)")
+            PMD3.log("Auto-mounting the DDI on \(device(udid)?.name ?? udid)")
             await mount(udid, automatic: true)
         }
     }
@@ -209,10 +209,10 @@ final class AppModel {
         if result.ok {
             mountStates[udid] = nil
             await refreshMount(udid)
-            if automatic { notify("Developer Disk Image montata", name) }
+            if automatic { notify("Developer Disk Image mounted", name) }
         } else {
             mountStates[udid] = .failed(result.errorSummary)
-            notify("Montaggio DDI fallito", "\(name): \(result.errorSummary)")
+            notify("DDI mount failed", "\(name): \(result.errorSummary)")
         }
     }
 
@@ -227,7 +227,7 @@ final class AppModel {
         let s = MirrorSession(udid: udid, port: port)
         s.isDeviceReachable = { [weak self] in self?.device(udid)?.reachable == true }
         s.onFailure = { [weak self] msg in
-            self?.notify("Mirroring interrotto", "\(self?.device(udid)?.name ?? udid): \(msg)")
+            self?.notify("Mirroring stopped", "\(self?.device(udid)?.name ?? udid): \(msg)")
         }
         sessions[udid] = s
         return s
@@ -275,7 +275,7 @@ final class AppModel {
             hotKey = GlobalHotKey { [weak self] in
                 MainActor.assumeIsolated { self?.toggleSelectedWindow() }
             }
-            if hotKey == nil { settingsError = "Scorciatoia ⌥⌘M già usata da un'altra app" }
+            if hotKey == nil { settingsError = "Shortcut ⌥⌘M is already used by another app" }
         } else if !hotKeyEnabled {
             hotKey = nil
         }
@@ -289,7 +289,7 @@ final class AppModel {
 
     func testNotification() {
         let names = devices.filter(\.reachable).map(\.name).joined(separator: ", ")
-        notify("PMD3Bar", names.isEmpty ? "Le notifiche funzionano." : "Le notifiche funzionano. iPhone collegati: \(names)")
+        notify("PMD3Bar", names.isEmpty ? "Notifications work." : "Notifications work. Connected iPhones: \(names)")
     }
 
     func setLaunchAtLogin(_ on: Bool) {
@@ -318,11 +318,11 @@ final class AppModel {
         else { return }
         latestPMD3 = version
         guard updateAvailable else { return }
-        PMD3.log("pymobiledevice3 \(version) disponibile (incluso: \(pmd3Version))")
+        PMD3.log("pymobiledevice3 \(version) available (bundled: \(pmd3Version))")
         if UserDefaults.standard.string(forKey: "notifiedPMD3Version") != version {
             UserDefaults.standard.set(version, forKey: "notifiedPMD3Version")
-            notify("pymobiledevice3 \(version) disponibile",
-                   "L'app include la \(pmd3Version). Per aggiornare: PMD3_VERSION=\(version) make python && make install")
+            notify("pymobiledevice3 \(version) available",
+                   "The app bundles \(pmd3Version). To update: PMD3_VERSION=\(version) make python && make install")
         }
     }
 
@@ -332,7 +332,7 @@ final class AppModel {
         let result = await PMD3.run(["version"], timeout: 30)
         pmd3Version = result.ok
             ? String(decoding: result.stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-            : "non disponibile"
+            : "not available"
     }
 
     func openLog() {

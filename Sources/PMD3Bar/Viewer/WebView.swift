@@ -78,7 +78,7 @@ final class ViewerController {
 
     static func fileStem(_ device: String) -> String {
         let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd 'alle' HH.mm.ss"
+        f.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
         let clean = device.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
         return "\(clean) \(f.string(from: Date()))"
     }
@@ -150,7 +150,7 @@ struct ViewerWebView: NSViewRepresentable {
                 case "ratio": if let r = Double(text), r > 0 { controller.canvasRatioChanged(r) }
                 case "recording-done": controller.recordingFinished(nil)
                 case "recording-error":
-                    PMD3.log("[viewer] registrazione: \(text)")
+                    PMD3.log("[viewer] recording: \(text)")
                     controller.recordingFinished(text)
                 default: break
                 }
@@ -196,14 +196,14 @@ struct ViewerWebView: NSViewRepresentable {
 
         func downloadDidFinish(_ download: WKDownload) {
             if let dest = pendingDestinations.removeValue(forKey: ObjectIdentifier(download)) {
-                PMD3.log("Salvato \(dest.path)")
+                PMD3.log("Saved \(dest.path)")
                 NSWorkspace.shared.activateFileViewerSelecting([dest])
             }
         }
 
         func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
             pendingDestinations.removeValue(forKey: ObjectIdentifier(download))
-            PMD3.log("Download fallito: \(error.localizedDescription)")
+            PMD3.log("Download failed: \(error.localizedDescription)")
         }
 
         // A reload (serve-web restarted) gets the mode from when the view was made: re-apply the current one.
@@ -212,7 +212,7 @@ struct ViewerWebView: NSViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-            PMD3.log("[viewer] caricamento fallito: \(error.localizedDescription)")
+            PMD3.log("[viewer] load failed: \(error.localizedDescription)")
         }
     }
 

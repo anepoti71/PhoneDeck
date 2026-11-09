@@ -4,7 +4,7 @@ import PMD3BarCore
 /// Locates the Python runtime and runs `python -m pymobiledevice3 ...`.
 enum PMD3 {
     enum Source: String {
-        case embedded = "Python incorporato"
+        case embedded = "Bundled Python"
         case environment = "PMD3_PYTHON"
         case conda = "conda env pymobiledevice"
     }
@@ -73,7 +73,7 @@ enum PMD3 {
     static func makePythonProcess(_ pythonArgs: [String], udid: String?) throws -> Process {
         guard let python else {
             throw NSError(domain: "PMD3Bar", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "Python con pymobiledevice3 non trovato"
+                NSLocalizedDescriptionKey: "Python with pymobiledevice3 not found"
             ])
         }
         let p = Process()
@@ -103,7 +103,7 @@ enum PMD3 {
     /// Runs the bundled helper script (`pmd3bar_helper.py <args>`).
     static func runHelper(_ args: [String], udid: String? = nil, timeout: TimeInterval = 30) async -> RunResult {
         guard let helperURL else {
-            return RunResult(status: -1, stdout: Data(), stderr: "pmd3bar_helper.py non trovato")
+            return RunResult(status: -1, stdout: Data(), stderr: "pmd3bar_helper.py not found")
         }
         return await runPython(["-I", helperURL.path] + args, label: "helper " + args.joined(separator: " "),
                                udid: udid, timeout: timeout)

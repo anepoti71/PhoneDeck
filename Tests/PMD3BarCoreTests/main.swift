@@ -33,7 +33,7 @@ suite("Device.parseHelperList") {
     check(list[1].connections == ["Network"] && list[1].unreachableError == nil,
           "a failing link is dropped when another one answers")
     check(!list[2].reachable && list[2].unreachableError == "Wi-Fi: timeout", "unreachable device keeps its error")
-    check(list[2].connectionLabel == "non raggiungibile", "unreachable label")
+    check(list[2].connectionLabel == "unreachable", "unreachable label")
     check(list[0].supportsMirroring, "iOS 27.2 can be mirrored")
     check(!list[1].supportsMirroring, "iOS 26.3.1 cannot be mirrored")
     check(Device.parseHelperList(json("not json")).isEmpty, "invalid JSON gives no devices")
@@ -61,7 +61,7 @@ suite("RunResult.errorSummary") {
     ╰─────────────────────╯
     """)
     check(boxed.errorSummary == "No such option: --udid 1234", "rich error box is unwrapped")
-    check(RunResult(status: 2, stdout: Data(), stderr: "").errorSummary == "Comando fallito (exit 2)", "empty stderr")
+    check(RunResult(status: 2, stdout: Data(), stderr: "").errorSummary == "Command failed (exit 2)", "empty stderr")
     check(RunResult(status: 0, stdout: Data(), stderr: "").ok, "exit 0 is ok")
     let log = RunResult(status: 1, stdout: Data(), stderr: "line one\nINFO trying again\nERROR Device not found\n")
     check(log.errorSummary == "INFO trying again ERROR Device not found", "last two lines")
