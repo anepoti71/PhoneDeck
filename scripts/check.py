@@ -133,6 +133,9 @@ def static_checks() -> None:
         record(not missing, "viewer.html ha topbar, trays e bottom-row (modalità solo iPhone)",
                f"id mancanti: {', '.join(missing)}: aggiorna layoutJS in WebView.swift")
         js = (viewer / "viewer.js").read_text()
+        record("+ 48 + 40" in js,
+               "viewer.js: fitCanvasToViewport riserva 88 px in larghezza (dimensione finestra)",
+               "cambiato: aggiorna ViewerLayout.reservedWidth in WebView.swift")
         record("function fitCanvasToViewport" in js and "innerHeight - 150" in js,
                "viewer.js: fitCanvasToViewport riserva 150 px in altezza (modalità solo iPhone)",
                "cambiato: aggiorna VIEWER_RESERVED_H in layoutJS (WebView.swift)")

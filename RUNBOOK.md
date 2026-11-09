@@ -75,14 +75,16 @@ build/python/bin/python3 -I Resources/pmd3bar_helper.py list
    la causa (di solito la modalità sviluppatore spenta).
 3. Premi ▶ accanto all'iPhone (o ⌥⌘M per l'iPhone selezionato): si apre la sua finestra e parte
    il mirroring. Per iPhone con iOS precedente al 27 il pulsante è 🔧 e apre solo gli Strumenti.
-4. La finestra mostra **solo l'iPhone**. Nella barra della finestra:
+4. La finestra mostra **solo l'iPhone** ed è larga quanto serve all'iPhone: ridimensionandola
+   resta proporzionata, e si adatta da sola quando l'iPhone viene ruotato. Nella barra della finestra:
    - 🎚 **Mostra controlli**: zoom, rotazione, cornice, Home/Siri/Swipe, appunti, accessibilità
      del viewer. Lo stesso pulsante ("Solo iPhone") li nasconde di nuovo. La scelta vale anche
      per le finestre aperte dopo;
    - ⏺ registra lo schermo in `~/Download`;
    - 🧭 apre lo stesso viewer nel browser;
    - ■ ferma il mirroring;
-   - ▯ apre il pannello **Strumenti**: App, File, Posizione, Log.
+   - ▯ apre il pannello **Strumenti**: App, File, Posizione, Log. La finestra si allarga per
+     fargli posto e torna stretta quando lo chiudi.
 5. Chiudendo la finestra si ferma il mirroring di quell'iPhone e torna la sua posizione reale.
 
 Porte: il primo iPhone usa la "Porta iniziale" impostata nel menu (8080 se non la cambi), gli altri

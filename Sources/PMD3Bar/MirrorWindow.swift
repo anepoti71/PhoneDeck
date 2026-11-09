@@ -2,6 +2,7 @@ import AppKit
 import MapKit
 import SwiftUI
 import UniformTypeIdentifiers
+import WebKit
 
 // MARK: - Window management
 
@@ -11,6 +12,76 @@ final class MirrorWindows: NSObject, NSWindowDelegate {
     static let shared = MirrorWindows()
     private var windows: [String: NSWindow] = [:]
     weak var model: AppModel?
+
+    /// What the window size follows: in "device only" mode with the tools closed, the window is
+    /// as wide as the iPhone screen needs for its height (and keeps that shape when resized).
+    private struct Fit {
+        var ratio: Double?
+        var deviceOnly = true
+        var tools = false
+        var active: Bool { deviceOnly && !tools && ratio != nil }
+    }
+    private var fits: [String: Fit] = [:]
+    /// Width the tools panel takes (inspectorColumnWidth ideal).
+    static let toolsWidth: CGFloat = 340
+    private static let minWidth: CGFloat = 300
+
+    /// Reports a change of screen proportions, layout mode or tools panel for a window.
+    func updateFit(_ udid: String, ratio: Double? = nil, deviceOnly: Bool? = nil, tools: Bool? = nil) {
+        var fit = fits[udid] ?? Fit()
+        let wasTools = fit.tools
+        if let ratio { fit.ratio = ratio }
+        if let deviceOnly { fit.deviceOnly = deviceOnly }
+        if let tools { fit.tools = tools }
+        let firstReport = fits[udid] == nil
+        fits[udid] = fit
+        guard let w = windows[udid] else { return }
+        if !firstReport, let tools, tools != wasTools, tools {
+            // Make room for the panel instead of squeezing the iPhone.
+            resize(w, widthBy: Self.toolsWidth)
+            return
+        }
+        if fit.active { fitToScreen(w, fit) }
+    }
+
+    private func fitToScreen(_ w: NSWindow, _ fit: Fit) {
+        guard let web = webView(in: w), let ratio = fit.ratio else { return }
+        let target = Self.viewportWidth(forHeight: web.bounds.height, ratio: ratio)
+        resize(w, widthBy: target - web.bounds.width)
+    }
+
+    /// Viewport width that lets the screen fill the viewport height (see ViewerLayout).
+    private static func viewportWidth(forHeight height: CGFloat, ratio: Double) -> CGFloat {
+        ViewerLayout.reservedWidth + max(100, height - ViewerLayout.ownReservedHeight) * CGFloat(ratio)
+    }
+
+    private func resize(_ w: NSWindow, widthBy delta: CGFloat) {
+        guard abs(delta) > 1 else { return }
+        var frame = w.frame
+        let newWidth = max(Self.minWidth, frame.width + delta)
+        frame.origin.x += (frame.width - newWidth) / 2  // keep the window centred where it is
+        frame.size.width = newWidth
+        w.setFrame(frame, display: true, animate: true)
+    }
+
+    private func webView(in w: NSWindow) -> WKWebView? {
+        func find(_ v: NSView) -> WKWebView? {
+            if let web = v as? WKWebView { return web }
+            for sub in v.subviews { if let web = find(sub) { return web } }
+            return nil
+        }
+        return w.contentView.flatMap(find)
+    }
+
+    /// While fitting, resizing keeps the window around the iPhone: the width follows the height.
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        guard let udid = sender.identifier?.rawValue, let fit = fits[udid], fit.active,
+              let ratio = fit.ratio, let web = webView(in: sender) else { return frameSize }
+        let chromeW = sender.frame.width - web.bounds.width
+        let chromeH = sender.frame.height - web.bounds.height
+        let width = chromeW + Self.viewportWidth(forHeight: frameSize.height - chromeH, ratio: ratio)
+        return NSSize(width: max(Self.minWidth, width), height: frameSize.height)
+    }
 
     func show(_ udid: String) {
         guard let model else { return }
@@ -59,6 +130,7 @@ final class MirrorWindows: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         guard let w = notification.object as? NSWindow, let udid = w.identifier?.rawValue else { return }
         windows[udid] = nil
+        fits[udid] = nil
         model?.closeWindow(udid)
         if windows.isEmpty { NSApp.setActivationPolicy(.accessory) }
     }
@@ -113,7 +185,7 @@ struct MirrorWindowView: View {
         } isTargeted: { dropTargeted = $0 }
         .inspector(isPresented: $showTools) {
             ToolsPanel(model: model, tools: tools, udid: udid, tab: $tab)
-                .inspectorColumnWidth(min: 300, ideal: 340, max: 520)
+                .inspectorColumnWidth(min: 300, ideal: MirrorWindows.toolsWidth, max: 520)
         }
         .toolbar { toolbar }
         .navigationTitle(device?.name ?? "iPhone")
@@ -121,7 +193,11 @@ struct MirrorWindowView: View {
         .onAppear {
             viewer.deviceName = device?.name ?? "iPhone"
             if !mirroringSupported { showTools = true }
+            viewer.onCanvasRatio = { [udid] r in MirrorWindows.shared.updateFit(udid, ratio: r) }
+            MirrorWindows.shared.updateFit(udid, deviceOnly: viewer.deviceOnly, tools: showTools)
         }
+        .onChange(of: showTools) { _, on in MirrorWindows.shared.updateFit(udid, tools: on) }
+        .onChange(of: viewer.deviceOnly) { _, on in MirrorWindows.shared.updateFit(udid, deviceOnly: on) }
     }
 
     private var subtitle: String {

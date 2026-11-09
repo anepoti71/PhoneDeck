@@ -2,6 +2,18 @@ import AppKit
 import SwiftUI
 import WebKit
 
+/// Geometry of the viewer page in "device only" mode, shared by the injected script and the
+/// window sizing (MirrorWindows): the screen gets the window height minus `ownReservedHeight`
+/// and needs `reservedWidth` of horizontal room next to it.
+enum ViewerLayout {
+    /// fitCanvasToViewport(): `reservedW = trays + 48 + 40` (trays are hidden in this mode).
+    static let reservedWidth: CGFloat = 88
+    /// Height kept for the stage padding once the top bar and button row are hidden.
+    static let ownReservedHeight: CGFloat = 24
+    /// fitCanvasToViewport(): `availH = innerHeight - 150`.
+    static let viewerReservedHeight: CGFloat = 150
+}
+
 /// Controls a viewer web view from SwiftUI (recording, reload).
 @MainActor
 @Observable
@@ -21,6 +33,15 @@ final class ViewerController {
         }
     }
     fileprivate weak var webView: WKWebView?
+    /// Width / height of the iPhone screen as streamed (changes with rotation).
+    private(set) var canvasRatio: Double?
+    /// Called when the screen proportions change (window sizing).
+    var onCanvasRatio: ((Double) -> Void)?
+
+    fileprivate func canvasRatioChanged(_ ratio: Double) {
+        canvasRatio = ratio
+        onCanvasRatio?(ratio)
+    }
 
     fileprivate func applyLayout() {
         webView?.evaluateJavaScript("window.__pmd3barLayout && window.__pmd3barLayout.setDeviceOnly(\(deviceOnly))")
@@ -121,6 +142,7 @@ struct ViewerWebView: NSViewRepresentable {
             MainActor.assumeIsolated {
                 switch kind {
                 case "log": PMD3.log("[viewer] \(text)")
+                case "ratio": if let r = Double(text), r > 0 { controller.canvasRatioChanged(r) }
                 case "recording-done": controller.recordingFinished(nil)
                 case "recording-error":
                     PMD3.log("[viewer] registrazione: \(text)")
@@ -211,11 +233,24 @@ struct ViewerWebView: NSViewRepresentable {
           let deviceOnly = \(deviceOnly);
           document.documentElement.classList.toggle('pmd3-device-only', deviceOnly);
 
-          const VIEWER_RESERVED_H = 150, OWN_RESERVED_H = 24;
+          const VIEWER_RESERVED_H = \(Int(ViewerLayout.viewerReservedHeight)), OWN_RESERVED_H = \(Int(ViewerLayout.ownReservedHeight));
+          // Tells the app the screen proportions, so the window can be sized around the iPhone.
+          let lastRatio = 0;
+          const reportRatio = () => {
+            const c = document.getElementById('c');
+            if (!c || !c.width || !c.height) return;
+            const r = c.width / c.height;
+            if (Math.abs(r - lastRatio) < 0.001) return;
+            lastRatio = r;
+            try { window.webkit.messageHandlers.pmd3bar.postMessage({kind: 'ratio', text: String(r)}); } catch (_) {}
+          };
           const install = () => {
             const orig = window.fitCanvasToViewport;
             if (typeof orig !== 'function' || orig.__pmd3bar) return;
             const fit = function () {
+              try { return fitInner(); } finally { reportRatio(); }
+            };
+            const fitInner = function () {
               if (!deviceOnly) return orig();
               const own = Object.getOwnPropertyDescriptor(window, 'innerHeight');
               const h = window.innerHeight;
