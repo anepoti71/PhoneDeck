@@ -16,6 +16,22 @@ enum ToolTab: String, CaseIterable, Identifiable {
         case .log: return "text.alignleft"
         }
     }
+    var isDeveloper: Bool { ToolTab.developerTabs.contains(self) }
+    static let developerTabs: [ToolTab] = [.conditions, .processes, .crashes, .log]
+}
+
+/// First level of the tools menu: developer tools are grouped under one entry.
+enum ToolGroup: String, CaseIterable, Identifiable {
+    case apps = "App", files = "File", location = "Posizione", developer = "Developer"
+    var id: String { rawValue }
+    var icon: String {
+        switch self {
+        case .apps: return "square.grid.2x2"
+        case .files: return "folder"
+        case .location: return "location"
+        case .developer: return "hammer"
+        }
+    }
 }
 
 struct ToolsPanel: View {
@@ -23,18 +39,53 @@ struct ToolsPanel: View {
     let tools: DeviceTools
     let udid: String
     @Binding var tab: ToolTab
+    @AppStorage("developerToolTab") private var lastDeveloperTab: ToolTab = .conditions
+
+    private var group: Binding<ToolGroup> {
+        Binding {
+            switch tab {
+            case .apps: return .apps
+            case .files: return .files
+            case .location: return .location
+            default: return .developer
+            }
+        } set: { g in
+            switch g {
+            case .apps: tab = .apps
+            case .files: tab = .files
+            case .location: tab = .location
+            case .developer: tab = lastDeveloperTab.isDeveloper ? lastDeveloperTab : .conditions
+            }
+        }
+    }
+
+    private var developerTab: Binding<ToolTab> {
+        Binding { tab } set: { t in tab = t; lastDeveloperTab = t }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("", selection: $tab) {
-                ForEach(ToolTab.allCases) { t in
-                    Image(systemName: t.icon).help(t.rawValue).tag(t)
+            Picker("", selection: group) {
+                ForEach(ToolGroup.allCases) { g in
+                    Image(systemName: g.icon).help(g.rawValue).tag(g)
                 }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .padding(.horizontal, 10).padding(.top, 10)
-            Text(tab.rawValue).font(.headline).padding(.vertical, 6)
+            if tab.isDeveloper {
+                Picker("", selection: developerTab) {
+                    ForEach(ToolTab.developerTabs) { t in
+                        Text(t.rawValue).tag(t)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.small)
+                .padding(.horizontal, 10).padding(.top, 6)
+            }
+            Text(tab.isDeveloper ? "Developer · \(tab.rawValue)" : tab.rawValue)
+                .font(.headline).padding(.vertical, 6)
             Divider()
             switch tab {
             case .apps: AppsTab(tools: tools)
