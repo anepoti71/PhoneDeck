@@ -28,7 +28,7 @@ Per installare, aggiornare e risolvere problemi vedi il **[RUNBOOK](RUNBOOK.md)*
   È il viewer web di pymobiledevice3, mostrato in una finestra nativa.
 - Di base si vede **solo l'iPhone**. I controlli del viewer (zoom, rotazione, cornice, tasti, appunti,
   accessibilità) e gli Strumenti si aprono solo se li chiedi, dai pulsanti nella barra della finestra.
-- Registrazione video dello schermo e screenshot, salvati in `~/Download`.
+- Registrazione dello schermo **con l'audio dell'iPhone** e screenshot, salvati in `~/Download`.
 - Pannello **Strumenti** (icona a destra nella barra della finestra):
   - **App**: elenco delle app installate con icone, installazione di `.ipa`, avvio, disinstallazione.
   - **File**: cartella Media dell'iPhone (foto in `DCIM`), con download, caricamento ed eliminazione.
@@ -127,8 +127,8 @@ PMD3Bar.app/Contents/
 
 ## Limiti noti
 
-- Si mirrora un iPhone per finestra, solo con iOS 27 o successivo. La registrazione è solo video:
-  l'audio resta dentro il viewer.
+- Mirroring solo con iOS 27 o successivo. La registrazione include l'audio solo se il viewer lo
+  sta riproducendo (audio attivo).
 - Via Wi-Fi l'iPhone deve essere sbloccato o sveglio e sulla stessa rete. Il primo abbinamento richiede il cavo.
 - Posizione simulata e avvio delle app richiedono la DDI montata.
 - La posizione **reale** dell'iPhone non è leggibile dal Mac: i servizi per sviluppatori permettono

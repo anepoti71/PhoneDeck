@@ -78,9 +78,9 @@ build/python/bin/python3 -I Resources/pmd3bar_helper.py list
 4. La finestra mostra **solo l'iPhone** ed è larga quanto serve all'iPhone: ridimensionandola
    resta proporzionata, e si adatta da sola quando l'iPhone viene ruotato. Nella barra della finestra:
    - 🎚 **Mostra controlli**: zoom, rotazione, cornice, Home/Siri/Swipe, appunti, accessibilità
-     del viewer. Lo stesso pulsante ("Solo iPhone") li nasconde di nuovo. La scelta vale anche
-     per le finestre aperte dopo;
-   - ⏺ registra lo schermo in `~/Download`;
+     del viewer. Lo stesso pulsante ("Solo iPhone") li nasconde di nuovo. La scelta viene
+     ricordata **per ogni iPhone**;
+   - ⏺ registra lo schermo con l'audio dell'iPhone (MP4: H.264 + AAC) in `~/Download`;
    - 🧭 apre lo stesso viewer nel browser;
    - ■ ferma il mirroring;
    - ▯ apre il pannello **Strumenti**: App, File, Posizione, Condizioni, Processi, Crash, Log.

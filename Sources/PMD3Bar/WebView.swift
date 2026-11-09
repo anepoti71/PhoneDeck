@@ -26,18 +26,27 @@ final class ViewerController {
     var deviceName = "iPhone"
     /// Only the iPhone, without the viewer's top bar, side trays and button row. The default;
     /// the choice is remembered for the next windows.
-    var deviceOnly: Bool = UserDefaults.standard.object(forKey: "deviceOnly") as? Bool ?? true {
+    var deviceOnly: Bool = true {
         didSet {
-            if persistMode { UserDefaults.standard.set(deviceOnly, forKey: "deviceOnly") }
+            if let key = modeKey { UserDefaults.standard.set(deviceOnly, forKey: key) }
             applyLayout()
         }
     }
-    /// The device windows remember the mode; the grid always shows only the iPhones.
-    @ObservationIgnored private let persistMode: Bool
+    /// Where this iPhone's mode is remembered (nil for the grid, which always shows only the iPhones).
+    @ObservationIgnored private let modeKey: String?
 
-    init(deviceOnly: Bool? = nil, persistMode: Bool = true) {
-        self.persistMode = persistMode
-        if let deviceOnly { self.deviceOnly = deviceOnly }
+    /// - udid: remember "only the iPhone" / "controls" for this iPhone (default: only the iPhone).
+    /// - deviceOnly: fixed mode, not remembered (grid).
+    init(udid: String? = nil, deviceOnly fixed: Bool? = nil) {
+        modeKey = fixed == nil ? udid.map { "deviceOnly.\($0)" } : nil
+        if let fixed {
+            deviceOnly = fixed
+        } else if let key = modeKey, let saved = UserDefaults.standard.object(forKey: key) as? Bool {
+            deviceOnly = saved
+        } else {
+            // Before per-iPhone memory there was one setting for every window.
+            deviceOnly = UserDefaults.standard.object(forKey: "deviceOnly") as? Bool ?? true
+        }
     }
     fileprivate weak var webView: WKWebView?
     /// Width / height of the iPhone screen as streamed (changes with rotation).
@@ -286,7 +295,7 @@ struct ViewerWebView: NSViewRepresentable {
     }
 
     /// Injected into the viewer: forwards console warnings/errors and records the screen canvas.
-    /// The recording is video only (the viewer plays audio through its own private AudioContext).
+    /// The recording includes the iPhone's audio when the viewer is playing it (audio tap below).
     static let bridgeJS = #"""
     (() => {
       const post = (kind, text) => {
@@ -301,17 +310,41 @@ struct ViewerWebView: NSViewRepresentable {
         post('log', 'WebCodecs VideoDecoder: ' + (typeof VideoDecoder !== 'undefined'));
       });
 
+      // Audio tap: the viewer plays sound by connecting nodes to its AudioContext's destination.
+      // Every such connection is mirrored into a MediaStream the recorder can add as a track.
+      const origConnect = AudioNode.prototype.connect;
+      AudioNode.prototype.connect = function (target, ...rest) {
+        const result = origConnect.call(this, target, ...rest);
+        try {
+          const ctx = this.context;
+          if (target === ctx.destination) {
+            if (!ctx.__pmd3barTap) ctx.__pmd3barTap = ctx.createMediaStreamDestination();
+            window.__pmd3barAudioTap = ctx.__pmd3barTap;
+            origConnect.call(this, ctx.__pmd3barTap);
+          }
+        } catch (_) {}
+        return result;
+      };
+
       let recorder = null, chunks = [], mime = '';
       window.__pmd3bar = {
         startRecording() {
           const canvas = document.getElementById('c');
           if (!canvas || !canvas.captureStream) return 'Schermo non disponibile per la registrazione';
           if (typeof MediaRecorder === 'undefined') return 'Registrazione non supportata';
-          mime = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+          const stream = canvas.captureStream(30);
+          const tap = window.__pmd3barAudioTap;
+          const audio = tap && tap.context.state !== 'closed' ? tap.stream.getAudioTracks() : [];
+          audio.forEach(t => stream.addTrack(t));
+          const types = audio.length
+            ? ['video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp8,opus', 'video/webm']
+            : ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm'];
+          mime = types.find(t => MediaRecorder.isTypeSupported(t)) || '';
           chunks = [];
           try {
-            recorder = new MediaRecorder(canvas.captureStream(30), mime ? {mimeType: mime, videoBitsPerSecond: 8000000} : {});
+            recorder = new MediaRecorder(stream, mime ? {mimeType: mime, videoBitsPerSecond: 8000000, audioBitsPerSecond: 160000} : {});
           } catch (e) { return 'Registrazione non avviata: ' + e.message; }
+          post('log', 'registrazione: ' + (mime || 'formato predefinito') + (audio.length ? ', con audio' : ', senza audio (audio del viewer non attivo)'));
           recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
           recorder.onerror = e => post('recording-error', e.error ? e.error.message : 'errore');
           recorder.start(1000);

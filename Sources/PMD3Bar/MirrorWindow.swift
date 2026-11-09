@@ -193,7 +193,7 @@ struct GridView: View {
         private var controllers: [String: ViewerController] = [:]
         @MainActor func controller(for udid: String, name: String) -> ViewerController {
             if let c = controllers[udid] { return c }
-            let c = ViewerController(deviceOnly: true, persistMode: false)  // grid: only the iPhones
+            let c = ViewerController(deviceOnly: true)  // grid: always only the iPhones, not remembered
             c.deviceName = name
             controllers[udid] = c
             return c
@@ -265,7 +265,13 @@ enum ToolTab: String, CaseIterable, Identifiable {
 struct MirrorWindowView: View {
     let model: AppModel
     let udid: String
-    @State private var viewer = ViewerController()
+
+    init(model: AppModel, udid: String) {
+        self.model = model
+        self.udid = udid
+        _viewer = State(initialValue: ViewerController(udid: udid))
+    }
+    @State private var viewer: ViewerController
     @State private var showTools = false
     @AppStorage("toolTab") private var tab: ToolTab = .apps
     @State private var dropTargeted = false
@@ -295,8 +301,12 @@ struct MirrorWindowView: View {
             return true
         } isTargeted: { dropTargeted = $0 }
         .inspector(isPresented: $showTools) {
-            ToolsPanel(model: model, tools: tools, udid: udid, tab: $tab)
-                .inspectorColumnWidth(min: 300, ideal: MirrorWindows.toolsWidth, max: 520)
+            // Built only while open: SwiftUI builds hidden inspector content too, and every tab
+            // loads its data (apps, conditions, processes…) as soon as it appears.
+            Group {
+                if showTools { ToolsPanel(model: model, tools: tools, udid: udid, tab: $tab) }
+            }
+            .inspectorColumnWidth(min: 300, ideal: MirrorWindows.toolsWidth, max: 520)
         }
         .toolbar { toolbar }
         .navigationTitle(device?.name ?? "iPhone")
@@ -378,7 +388,7 @@ struct MirrorWindowView: View {
             switch viewer.recording {
             case .idle:
                 Button { viewer.startRecording() } label: { Label("Registra", systemImage: "record.circle") }
-                    .help("Registra lo schermo (video, senza audio) in Download")
+                    .help("Registra lo schermo, con l'audio dell'iPhone, in Download")
                     .disabled(session.state != .running || !mirroringSupported)
             case .recording(let since):
                 Button { viewer.stopRecording() } label: {
