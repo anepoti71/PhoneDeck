@@ -1,186 +1,187 @@
 # PMD3Bar: runbook
 
-Procedure per compilare, eseguire, aggiornare e risolvere i problemi di PMD3Bar.
-Per una descrizione del progetto vedi il [README](README.md).
+Procedures to build, run, update and troubleshoot PMD3Bar.
+For a project overview see the [README](README.md).
 
-Tutti i comandi si lanciano dalla cartella del progetto:
+All commands run from the project folder:
 
 ```bash
-cd /Users/anepoti/workspace/experiments/PMD3Bar
+cd path/to/PMD3Bar   # the cloned repository
 ```
 
-- [1. Prima installazione](#1-prima-installazione)
-- [2. Eseguire](#2-eseguire)
-- [3. Usare l'app](#3-usare-lapp)
-- [4. Aggiornare pymobiledevice3](#aggiornare-pymobiledevice3)
-- [5. Aggiornare il Python incluso](#5-aggiornare-il-python-incluso)
-- [6. Modificare il codice](#6-modificare-il-codice)
-- [7. Log e diagnosi](#7-log-e-diagnosi)
-- [8. Problemi frequenti](#8-problemi-frequenti)
-- [9. Regole da rispettare](#9-regole-da-rispettare)
-- [10. Cambiare l'icona](#10-cambiare-licona)
+- [1. First install](#1-first-install)
+- [2. Running](#2-running)
+- [3. Using the app](#3-using-the-app)
+- [4. Updating pymobiledevice3](#4-updating-pymobiledevice3)
+- [5. Updating the bundled Python](#5-updating-the-bundled-python)
+- [6. Changing the code](#6-changing-the-code)
+- [7. Logs and diagnostics](#7-logs-and-diagnostics)
+- [8. Common problems](#8-common-problems)
+- [9. Rules to follow](#9-rules-to-follow)
+- [10. Changing the icon](#10-changing-the-icon)
 
 ---
 
-## 1. Prima installazione
+## 1. First install
 
-**Prerequisiti**
+**Prerequisites**
 ```bash
-xcode-select -p        # deve rispondere con un percorso; altrimenti: xcode-select --install
+xcode-select -p        # must print a path; otherwise: xcode-select --install
 swift --version        # Swift 6.x
-uname -m               # arm64 (il Python incluso è solo per Apple Silicon)
+uname -m               # arm64 (the bundled Python is Apple Silicon only)
 ```
 
-**Preparare l'iPhone (una volta sola)**
-1. Collegalo con il cavo e tocca **Autorizza** sull'iPhone.
-2. Attiva la modalità sviluppatore: Impostazioni ▸ Privacy e sicurezza ▸ Modalità sviluppatore,
-   poi riavvia l'iPhone e conferma.
-3. Per usarlo anche via Wi-Fi: Finder ▸ iPhone ▸ "Mostra questo iPhone quando è connesso al Wi-Fi".
+**Prepare the iPhone (once)**
+1. Connect it with the cable and tap **Trust** on the iPhone.
+2. Enable Developer Mode: Settings ▸ Privacy & Security ▸ Developer Mode, then restart the
+   iPhone and confirm.
+3. To use it over Wi-Fi too: Finder ▸ iPhone ▸ "Show this iPhone when on Wi-Fi".
 
-**Compilare e installare**
+**Build and install**
 ```bash
-make python     # scarica CPython 3.12 (sha256 verificato) + pymobiledevice3 in build/python
-make install    # compila, crea build/PMD3Bar.app e la copia in ~/Applications
+make python     # downloads CPython 3.12 (sha256 verified) + pymobiledevice3 into build/python
+make install    # builds, creates build/PMD3Bar.app and copies it to ~/Applications
 ```
 
-`make python` scarica circa 25 MB e installa un centinaio di pacchetti: serve una volta sola,
-e poi solo per aggiornare pymobiledevice3.
+`make python` downloads about 25 MB and installs about a hundred packages: you need it once,
+and then only to update pymobiledevice3.
 
-## 2. Eseguire
+## 2. Running
 
-| Comando | Cosa fa |
+| Command | What it does |
 |---|---|
-| `open ~/Applications/PMD3Bar.app` | Avvia l'app installata |
-| `make run` | Ricrea `build/PMD3Bar.app` e la avvia (chiude prima quella aperta) |
-| `make dev` | Esegue dai sorgenti con `swift run`, usando il Python del conda env |
-| `make check` | Verifica pymobiledevice3 incluso (vedi [4.3](#43-verificare-dopo-laggiornamento)) |
-| `open build/PMD3Bar.app --args --open <UDID>` | Avvia e apre subito la finestra di quell'iPhone |
+| `open ~/Applications/PMD3Bar.app` | Starts the installed app |
+| `make run` | Rebuilds `build/PMD3Bar.app` and starts it (quits the running one first) |
+| `make dev` | Runs from source with `swift run`, using the conda env's Python |
+| `make check` | Checks the bundled pymobiledevice3 (see [4.3](#43-checking-after-the-update)) |
+| `open build/PMD3Bar.app --args --open <UDID>` | Starts and immediately opens that iPhone's window |
 
-Per trovare l'UDID degli iPhone:
+To find the iPhones' UDIDs:
 ```bash
 build/python/bin/python3 -I Resources/pmd3bar_helper.py list
 ```
 
-**Avvio automatico al login**: menu ▸ Impostazioni ▸ "Avvia al login". Attivalo dalla copia in
-`~/Applications`: macOS registra il percorso dell'app da cui lo attivi.
+**Launch at login**: menu ▸ Settings ▸ "Launch at login". Turn it on from the copy in
+`~/Applications`: macOS records the path of the app you turn it on from.
 
-**Chiudere**: menu ▸ **Esci**. Si fermano anche tutti i mirroring, e i processi di posizione e log.
+**Quitting**: menu ▸ **Quit**. This also stops all mirroring, location and log processes.
 
-## 3. Usare l'app
+## 3. Using the app
 
-1. Clicca l'icona dell'iPhone nella barra dei menu.
-2. Seleziona un iPhone: la sezione **Developer Disk Image** si riferisce all'iPhone selezionato.
-   Con "Monta la Developer Disk Image appena colleghi un iPhone" attivo (predefinito), l'app la
-   monta da sola, una volta per ogni collegamento. Se fallisce, premi **Monta** dopo aver risolto
-   la causa (di solito la modalità sviluppatore spenta).
-3. Premi ▶ accanto all'iPhone (o ⌥⌘M per l'iPhone selezionato): si apre la sua finestra e parte
-   il mirroring. Per iPhone con iOS precedente al 27 il pulsante è 🔧 e apre solo gli Strumenti.
-4. La finestra mostra **solo l'iPhone** ed è larga quanto serve all'iPhone: ridimensionandola
-   resta proporzionata, e si adatta da sola quando l'iPhone viene ruotato. Nella barra della finestra:
-   - 🎚 **Mostra controlli**: zoom, rotazione, cornice, Home/Siri/Swipe, appunti, accessibilità
-     del viewer. Lo stesso pulsante ("Solo iPhone") li nasconde di nuovo. La scelta viene
-     ricordata **per ogni iPhone**;
-   - ⏺ registra lo schermo con l'audio dell'iPhone (MP4: H.264 + AAC) in `~/Download`;
-   - 🧭 apre lo stesso viewer nel browser;
-   - ■ ferma il mirroring;
-   - ▯ apre il pannello **Strumenti**: App, File, Posizione, Condizioni, Processi, Crash, Log.
-     La finestra si allarga per fargli posto e torna stretta quando lo chiudi.
-     - **Condizioni** (rete lenta, stato termico, GPU): una alla volta; resta attiva finché la
-       finestra è aperta, poi l'iPhone torna normale. Richiede la DDI.
-     - **Processi**: un campionamento dura circa 10 s; "Ogni 15 s" lo ripete. Tasto destro per
-       chiudere un processo. Richiede la DDI.
-     - **Crash**: doppio clic per leggere un report, tasto destro per scaricarlo o eliminarlo.
-5. **Griglia**: con almeno due iPhone con iOS 27 o successivo, menu ▸ **Tutti in griglia** li mostra
-   affiancati in un'unica finestra (avvia il mirroring dove serve e lo ferma alla chiusura, tranne per
-   gli iPhone con la loro finestra aperta). Da terminale: `open ~/Applications/PMD3Bar.app --args --grid`.
-6. Chiudendo la finestra si fermano il mirroring di quell'iPhone (salvo che sia nella griglia), la
-   condizione attiva e la posizione simulata.
+1. Click the iPhone icon in the menu bar.
+2. Select an iPhone: the **Developer Disk Image** section refers to the selected iPhone.
+   With "Mount the Developer Disk Image as soon as an iPhone connects" on (the default), the app
+   mounts it by itself, once per connection. If that fails, press **Mount** after fixing the
+   cause (usually Developer Mode turned off).
+3. Press ▶ next to the iPhone (or ⌥⌘M for the selected iPhone): its window opens and mirroring
+   starts. For iPhones on iOS earlier than 27 the button is 🔧 and opens Tools only.
+4. The window shows **only the iPhone**, like the Simulator: it is transparent around the bezel,
+   the title is hidden and the toolbar floats above the device; drag the bezel to move it. It is
+   as wide as the iPhone needs: resizing keeps the proportions, and it adapts by itself when the
+   iPhone rotates. With the controls or Tools open it goes back to a regular black window. In the
+   window toolbar:
+   - 🎚 **Show controls**: the viewer's zoom, rotation, bezel, Home/Siri/Swipe, clipboard and
+     accessibility. The same button ("iPhone only") hides them again. The choice is remembered
+     **per iPhone**;
+   - ⏺ records the screen with the iPhone's audio (MP4: H.264 + AAC) to `~/Downloads`;
+   - 🧭 opens the same viewer in the browser;
+   - ■ stops mirroring;
+   - ▯ opens the **Tools** panel: Apps, Files, Location, Developer (Conditions, Processes,
+     Crashes, Log). The window widens to make room and narrows again when you close it.
+     - **Conditions** (slow network, thermal state, GPU): one at a time; stays active while the
+       window is open, then the iPhone goes back to normal. Needs the DDI.
+     - **Processes**: one sample takes about 10 s; "Every 15 s" repeats it. Right-click to kill
+       a process. Needs the DDI.
+     - **Crashes**: double-click to read a report, right-click to download or delete it.
+5. **Grid**: with at least two iPhones on iOS 27 or later, menu ▸ **All in grid** shows them side
+   by side in a single window (it starts mirroring where needed and stops it on close, except for
+   iPhones with their own window open). From the terminal: `open ~/Applications/PMD3Bar.app --args --grid`.
+6. Closing the window stops that iPhone's mirroring (unless it's in the grid), the active
+   condition and the simulated location.
 
-Porte: il primo iPhone usa la "Porta iniziale" impostata nel menu (8080 se non la cambi), gli altri
-le successive libere.
+Ports: the first iPhone uses the "Starting port" set in the menu (8080 unless you change it), the
+others the next free ones.
 
-**Impostazioni** (menu ▸ Impostazioni):
+**Settings** (menu ▸ Settings):
 
-| Opzione | Predefinito | Note |
+| Option | Default | Notes |
 |---|---|---|
-| Monta la DDI appena colleghi un iPhone | sì | Un tentativo per collegamento; riprova dopo uno scollegamento di oltre 20 s |
-| Notifiche | sì | La prima volta macOS chiede il permesso. Collegamenti e scollegamenti sono notificati solo dopo 20 s, per non avvisare a ogni standby via Wi-Fi |
-| Scorciatoia ⌥⌘M | sì | Se un'altra app la usa già, l'app lo segnala sotto le opzioni |
-| Avvia al login | no | Solo dall'app compilata (`.app`), non con `make dev` |
-| Porta iniziale | 8080 | |
+| Mount the DDI as soon as an iPhone connects | on | One attempt per connection; retries after a disconnection longer than 20 s |
+| Notifications | on | macOS asks for permission the first time. Connections and disconnections are notified only after 20 s, so Wi-Fi standby doesn't trigger alerts every time |
+| Shortcut ⌥⌘M | on | If another app already uses it, the app says so below the options |
+| Launch at login | off | Only from the built app (`.app`), not with `make dev` |
+| Starting port | 8080 | |
 
-## Aggiornare pymobiledevice3
+## 4. Updating pymobiledevice3
 
-L'app contiene **una sua copia** di pymobiledevice3, a una versione fissata in
-`scripts/fetch-python.sh` (`PMD3_VERSION`, oggi `11.50.3`). Gli aggiornamenti pubblicati non
-cambiano niente finché non aggiorni tu, e il conda env `pymobiledevice` è separato.
+The app contains **its own copy** of pymobiledevice3, pinned in `scripts/fetch-python.sh`
+(`PMD3_VERSION`, currently `11.50.3`). Published updates change nothing until you update, and
+the `pymobiledevice` conda env is separate.
 
-### 4.1 Controllare se c'è una nuova versione
+### 4.1 Checking for a new version
 ```bash
 build/python/bin/python3 -I -m pip index versions pymobiledevice3 | head -1
 ```
-Novità e note di rilascio: https://github.com/doronz88/pymobiledevice3/releases
+What's new and release notes: https://github.com/doronz88/pymobiledevice3/releases
 
-Quando esce una versione nuova, l'app lo segnala nel menu ("Disponibile la …") e con una notifica.
-Il pulsante **Copia comando** copia il comando di aggiornamento, da lanciare nella cartella del progetto.
+When a new version is out, the app flags it in the menu ("… available") and with a notification.
+The **Copy command** button copies the update command, to run in the project folder.
 
-### 4.2 Aggiornare
+### 4.2 Updating
 ```bash
-PMD3_VERSION=11.51.0 make python     # sostituisci con la versione voluta
+PMD3_VERSION=11.51.0 make python     # replace with the version you want
 make install
 ```
 
-`make python` è **sicuro**:
-1. installa la nuova versione in `build/python.new`;
-2. lancia la verifica statica (`check.py --no-device`). Con `CHECK_DEVICE=1` lancia anche quella
-   sul dispositivo, se c'è un iPhone collegato;
-3. solo se passa, sposta la versione attuale in `build/python.prev` e mette in uso la nuova.
+`make python` is **safe**:
+1. it installs the new version into `build/python.new`;
+2. it runs the static check (`check.py --no-device`). With `CHECK_DEVICE=1` it also runs the
+   device check, if an iPhone is connected;
+3. only if that passes, it moves the current version to `build/python.prev` and puts the new one in use.
 
-Se la verifica fallisce, `build/python` (e quindi l'app) resta com'era. La versione scartata rimane
-in `build/python.new` per indagare, e `FORCE=1` la installa comunque.
+If the check fails, `build/python` (and so the app) stays as it was. The rejected version stays
+in `build/python.new` for investigation, and `FORCE=1` installs it anyway.
 
-Per provare una correzione non ancora rilasciata, usa il `master` di GitHub:
+To try a fix that isn't released yet, use GitHub's `master`:
 ```bash
 PMD3_SPEC="git+https://github.com/doronz88/pymobiledevice3.git@master" make python && make install
 ```
 
-Per rendere permanente la nuova versione, aggiorna `PMD3_VERSION` in `scripts/fetch-python.sh`.
+To make the new version permanent, update `PMD3_VERSION` in `scripts/fetch-python.sh`.
 
-
-### 4.3 Verificare dopo l'aggiornamento
+### 4.3 Checking after the update
 
 ```bash
-make check                          # controlli statici + iPhone collegato
-make check-static                   # solo controlli statici, senza iPhone
-make check CHECK_ARGS="--location"  # anche la posizione simulata (imposta Roma e ripristina)
-make check CHECK_ARGS="--udid <UDID>"   # su un iPhone preciso
+make check                          # static checks + connected iPhone
+make check-static                   # static checks only, no iPhone
+make check CHECK_ARGS="--location"  # also simulated location (sets Rome and restores)
+make check CHECK_ARGS="--udid <UDID>"   # on a specific iPhone
 ```
 
-`scripts/check.py` verifica:
-- **senza iPhone**: comandi e opzioni usati dall'app, funzioni Python usate da `pmd3bar_helper.py`,
-  il canvas del viewer, il testo "Ctrl+C" atteso dalla posizione simulata;
-- **con iPhone**: elenco dispositivi, stato DDI, file, app, log di sistema, viewer `serve-web`
-  (solo iOS 27 e successivi; sugli altri viene saltato).
+`scripts/check.py` checks:
+- **without an iPhone**: commands and options used by the app, Python functions used by
+  `pmd3bar_helper.py`, the viewer canvas, the "Ctrl+C" text expected from simulated location;
+- **with an iPhone**: device list, DDI state, files, apps, system log, `serve-web` viewer
+  (iOS 27 and later only; skipped on others).
 
-Esce con codice 0 se tutto passa e, per ogni controllo fallito, indica cosa sistemare. Sceglie da
-solo un iPhone raggiungibile, preferendo quelli con iOS 27 o successivo e quelli via USB.
+It exits with code 0 if everything passes and, for each failed check, says what to fix. It picks
+a reachable iPhone by itself, preferring those on iOS 27 or later and those on USB.
 
-Se un controllo fallisce, questa tabella dice dove guardare. Le stesse prove si possono fare a
-mano dall'app:
+If a check fails, this table says where to look. The same tests can be done by hand from the app:
 
-| # | Prova | Se fallisce, guarda… |
+| # | Test | If it fails, look at… |
 |---|---|---|
-| 1 | Il menu mostra l'iPhone con nome e versione di iOS | `pmd3bar_helper.py list` (funzioni interne `usbmux.list_devices`, `create_using_usbmux`) |
-| 2 | Lo stato della DDI è corretto, **Monta** funziona | JSON di `mounter list`, opzione `mounter auto-mount --udid` |
-| 3 | ▶ apre la finestra e si vede lo schermo | `developer core-device display serve-web --http-port` |
-| 4 | ⏺ registra e salva un video | id del canvas `c` nel viewer (`WebView.swift`, `bridgeJS`) |
-| 5 | Strumenti ▸ App mostra l'elenco | `pmd3bar_helper.py apps` (`InstallationProxyService.get_apps`) |
-| 6 | Strumenti ▸ File mostra le cartelle | `pmd3bar_helper.py afc-ls` (`AfcService.listdir/stat`) |
-| 7 | Strumenti ▸ Posizione: "Attiva" in pochi secondi | testo "Ctrl+C" stampato da `simulate-location set` (`DeviceTools.setLocation`) |
-| 8 | Strumenti ▸ Log mostra righe | opzioni `syslog live --format json --no-debug --no-info --process-name --match-insensitive` |
-| 9 | Strumenti ▸ App ▸ avvia un'app | `developer core-device launch-application` |
+| 1 | The menu shows the iPhone with name and iOS version | `pmd3bar_helper.py list` (internal functions `usbmux.list_devices`, `create_using_usbmux`) |
+| 2 | The DDI state is correct, **Mount** works | JSON from `mounter list`, option `mounter auto-mount --udid` |
+| 3 | ▶ opens the window and the screen shows | `developer core-device display serve-web --http-port` |
+| 4 | ⏺ records and saves a video | canvas id `c` in the viewer (`WebView.swift`, `bridgeJS`) |
+| 5 | Tools ▸ Apps shows the list | `pmd3bar_helper.py apps` (`InstallationProxyService.get_apps`) |
+| 6 | Tools ▸ Files shows the folders | `pmd3bar_helper.py afc-ls` (`AfcService.listdir/stat`) |
+| 7 | Tools ▸ Location: "Active" within a few seconds | "Ctrl+C" text printed by `simulate-location set` (`DeviceTools.setLocation`) |
+| 8 | Tools ▸ Developer ▸ Log shows lines | options `syslog live --format json --no-debug --no-info --process-name --match-insensitive` |
+| 9 | Tools ▸ Apps ▸ launch an app | `developer core-device launch-application` |
 
-Controlli rapidi da terminale:
+Quick checks from the terminal:
 ```bash
 PY="build/python/bin/python3 -I"
 $PY -m pymobiledevice3 version
@@ -191,128 +192,128 @@ $PY -m pymobiledevice3 developer core-device display serve-web -h | grep -- --ht
 $PY -m pymobiledevice3 syslog live -h | grep -E -- '--format|--no-info|--process-name'
 ```
 
-### 4.4 Tornare alla versione precedente
+### 4.4 Rolling back to the previous version
 ```bash
-make python-rollback && make install     # scambia build/python con build/python.prev
+make python-rollback && make install     # swaps build/python with build/python.prev
 ```
-Rilanciandolo si torna alla versione nuova. In alternativa: `PMD3_VERSION=11.50.3 make python && make install`.
+Running it again goes back to the new version. Alternatively: `PMD3_VERSION=11.50.3 make python && make install`.
 
-## 5. Aggiornare il Python incluso
+## 5. Updating the bundled Python
 
-Versione, URL e sha256 sono fissati in `scripts/fetch-python.sh` (`PBS_TAG`, `PBS_FILE`, `PBS_SHA256`).
-Per aggiornarli:
+Version, URL and sha256 are pinned in `scripts/fetch-python.sh` (`PBS_TAG`, `PBS_FILE`, `PBS_SHA256`).
+To update them:
 
-1. Scegli una release di https://github.com/astral-sh/python-build-standalone/releases che abbia
-   almeno due settimane.
-2. Prendi il file `cpython-3.12.X+TAG-aarch64-apple-darwin-install_only.tar.gz` e il suo sha256:
+1. Pick a release from https://github.com/astral-sh/python-build-standalone/releases that is at
+   least two weeks old.
+2. Take the file `cpython-3.12.X+TAG-aarch64-apple-darwin-install_only.tar.gz` and its sha256:
    ```bash
    gh api repos/astral-sh/python-build-standalone/releases/tags/<TAG> \
      -q '.assets[] | select(.name|test("aarch64-apple-darwin-install_only.tar.gz$")) | .name+" "+.digest'
    ```
-3. Aggiorna le tre variabili, poi `make python && make install`.
+3. Update the three variables, then `make python && make install`.
 
-Se cambi la versione minore di Python (per esempio da 3.12 a 3.13), aggiorna anche i percorsi
-`lib/python3.12` in `fetch-python.sh`.
+If you change Python's minor version (for example from 3.12 to 3.13), also update the
+`lib/python3.12` paths in `fetch-python.sh`.
 
-## 6. Modificare il codice
+## 6. Changing the code
 
-| Voglio… | Comando |
+| I want to… | Command |
 |---|---|
-| Provare una modifica Swift al volo | `make dev` (usa il conda env, non serve `make python`) |
-| Ricreare e avviare l'app | `make run` |
-| Solo controllare che compili | `swift build -c release --arch arm64` |
-| Lanciare i test della logica | `make test` (non serve l'iPhone) |
-| Salvare il lavoro su GitHub | `git push` (repository **privato** `anepoti71/PMD3Bar`) |
-| Provare `pmd3bar_helper.py` | `build/python/bin/python3 -I Resources/pmd3bar_helper.py list` |
-| Pulire | `make clean` (lascia `build/python`) |
+| Try a Swift change quickly | `make dev` (uses the conda env, no `make python` needed) |
+| Rebuild and start the app | `make run` |
+| Only check that it compiles | `swift build -c release --arch arm64` |
+| Run the logic tests | `make test` (no iPhone needed) |
+| Save work to GitHub | `git push` (to the **private** `origin` repository) |
+| Try `pmd3bar_helper.py` | `build/python/bin/python3 -I Resources/pmd3bar_helper.py list` |
+| Clean up | `make clean` (keeps `build/python`) |
 
-- La logica senza interfaccia (lettura del JSON, versioni, geometria, date) sta in
-  `Sources/PMD3BarCore` ed è coperta da `make test`. Se aggiungi logica di questo tipo, mettila lì
-  con un test in `Tests/PMD3BarCoreTests/main.swift`. I test sono un piccolo eseguibile perché
-  XCTest e swift-testing arrivano solo con Xcode; installando Xcode si possono convertire.
-- Gli errori di SourceKit nell'editor ("Cannot find type…") sono falsi positivi, perché l'editor
-  non vede il pacchetto Swift. Fa fede `swift build`.
-- Il viewer web (HTML/JS/CSS) è dentro pymobiledevice3: non modificarlo lì, perché si perde al
-  prossimo aggiornamento. Aggiungi le funzioni nell'app (`WebView.swift`, `bridgeJS`) o proponile a upstream.
-- I comandi lunghi (mirroring, posizione, log) vanno sempre fermati prima con SIGINT, poi, se
-  ancora attivi dopo qualche secondo, con SIGTERM. `syslog live` ignora SIGINT quando riceve
-  molte righe.
+- UI-free logic (JSON parsing, versions, geometry, dates) lives in `Sources/PMD3BarCore` and is
+  covered by `make test`. If you add logic of this kind, put it there with a test in
+  `Tests/PMD3BarCoreTests/main.swift`. The tests are a small executable because XCTest and
+  swift-testing only ship with Xcode; with Xcode installed they can be converted.
+- SourceKit errors in the editor ("Cannot find type…") are false positives, because the editor
+  doesn't see the Swift package. `swift build` is the source of truth.
+- The web viewer (HTML/JS/CSS) lives inside pymobiledevice3: don't change it there, because the
+  change is lost on the next update. Add features in the app (`WebView.swift`, `bridgeJS`) or
+  propose them upstream.
+- Long-running commands (mirroring, location, log) must always be stopped with SIGINT first, then,
+  if still running after a few seconds, with SIGTERM. `syslog live` ignores SIGINT when it receives
+  many lines.
 
-## 7. Log e diagnosi
+## 7. Logs and diagnostics
 
-- **Log dell'app**: `~/Library/Logs/PMD3Bar/pmd3bar.log` (menu ▸ **Log**). Contiene ogni comando
-  lanciato con il suo codice di uscita e gli errori, l'output di `serve-web` e gli errori del viewer
-  (`[viewer] …`).
+- **App log**: `~/Library/Logs/PMD3Bar/pmd3bar.log` (menu ▸ **Log**). It contains every command
+  run with its exit code and errors, the `serve-web` output and viewer errors (`[viewer] …`).
   ```bash
   tail -f ~/Library/Logs/PMD3Bar/pmd3bar.log
   ```
-- **Viewer nella finestra**: Safari ▸ Sviluppo ▸ *nome del Mac* ▸ PMD3Bar, per ispezionare il WKWebView.
-- **Processi attivi**:
+- **Viewer in the window**: Safari ▸ Develop ▸ *Mac name* ▸ PMD3Bar, to inspect the WKWebView.
+- **Running processes**:
   ```bash
   pgrep -fl 'PMD3Bar|pymobiledevice3'
   ```
-- **Chi occupa una porta**: `lsof -nP -iTCP:8080 -sTCP:LISTEN`
+- **Who holds a port**: `lsof -nP -iTCP:8080 -sTCP:LISTEN`
 
-## 8. Problemi frequenti
+## 8. Common problems
 
-| Sintomo | Causa | Soluzione |
+| Symptom | Cause | Fix |
 |---|---|---|
-| "Nessun dispositivo" | iPhone non abbinato, bloccato o su un'altra rete | Collega il cavo e tocca Autorizza. Per il Wi-Fi: sbloccalo e mettilo sulla stessa rete |
-| iPhone in arancione "non raggiungibile" | usbmuxd lo vede via Wi-Fi ma l'iPhone non risponde (standby) | Sblocca l'iPhone; si aggiorna da solo entro 5 secondi |
-| Mirroring "Il viewer non risponde" | DDI non montata, oppure modalità sviluppatore spenta | **Monta** la DDI, controlla la modalità sviluppatore, poi Riprova |
-| Video che si blocca e riparte | Il viewer riavvia da solo lo stream quando non arrivano fotogrammi (`no AU progress` nel log) | Normale ogni tanto; se succede spesso usa il cavo |
-| Il mirroring si ferma staccando il cavo | Il tunnel USB si interrompe | L'app lo riavvia da sola via Wi-Fi; se non succede premi ▶ |
-| Porta 8081 invece di 8080 | 8080 è occupata da un altro processo | `lsof -nP -iTCP:8080 -sTCP:LISTEN`; se è un `serve-web` rimasto attivo vedi la riga sotto |
-| `serve-web` ancora attivo dopo la chiusura | L'app è stata chiusa in modo forzato | `pkill -INT -f 'pymobiledevice3 developer core-device display serve-web'` |
-| L'iPhone resta in una posizione simulata | L'app è stata chiusa in modo forzato con la posizione attiva | Strumenti ▸ Posizione ▸ **Ripristina reale**, oppure `PYMOBILEDEVICE3_UDID=<UDID> build/python/bin/python3 -I -m pymobiledevice3 developer dvt simulate-location clear` |
-| `ModuleNotFoundError: No module named 'importlib'` nel log | L'app è stata ricreata mentre era aperta | Già gestito: `make run` e `make install` chiudono prima l'app. Riavviala |
-| Pip non riesce ad aggiornare (Permission denied) | File creati da root, dopo aver usato `sudo` con pymobiledevice3 | `sudo rm -rf` della cartella indicata nell'errore; poi non usare più `sudo` |
-| "Python con pymobiledevice3 non trovato" | Manca `build/python` (in `make dev`, manca il conda env) | `make python`, oppure imposta `PMD3_PYTHON=/percorso/python` |
-| In modalità solo iPhone ricompaiono barra o pannelli, oppure lo schermo è piccolo | Una nuova versione del viewer ha cambiato id o calcolo delle dimensioni | `make check-static` lo segnala; aggiorna `layoutJS` in `WebView.swift` |
-| Registrazione che non parte | Il viewer è cambiato (canvas `c`), oppure lo stream non è ancora attivo | Aspetta il video; vedi il punto 4 della [verifica](#43-verificare-dopo-laggiornamento) |
-| "Screen streaming needs iOS 27.0 or later" | iPhone con iOS precedente al 27 | Normale: per quell'iPhone usa gli Strumenti (pulsante 🔧) |
-| Nessuna notifica | Permesso negato, oppure app avviata con `make dev` | Impostazioni di Sistema ▸ Notifiche ▸ PMD3Bar; usa l'app compilata |
-| ⌥⌘M non fa niente | Scorciatoia già usata da un'altra app, oppure disattivata | Menu ▸ Impostazioni: c'è un messaggio rosso se la registrazione è fallita |
-| Icona vecchia o generica in Dock o Finder | Cache delle icone di macOS | `make install` registra di nuovo l'app con un numero di build nuovo; se non basta: `killall Dock` |
-| Icona generica solo nelle **notifiche** | Il Centro Notifiche memorizza l'icona **per bundle ID** la prima volta che vede l'app, e non la aggiorna più (il suo database è protetto: non si pulisce né riavviando i processi né cambiando versione) | Unico rimedio: cambiare `CFBundleIdentifier` in `Resources/Info.plist`, migrando le impostazioni come fa `migrateLegacyDefaults()` in `PMD3BarApp.swift`. Già fatto una volta (`local.experiments.PMD3Bar` → `local.pmd3bar.PMD3Bar`). Per non ricaderci: cambia l'icona *prima* della prima notifica |
-| La mappa della Posizione non mostra dove si trova l'iPhone | Non si può leggere la posizione reale dell'iPhone (vedi README, Limiti noti) | La mappa parte dal Mac ("Questo Mac") o dall'ultima posizione simulata; il pulsante ◎ centra sul Mac |
-| "Posizione del Mac non disponibile" | Permesso di localizzazione negato a PMD3Bar | Impostazioni di Sistema ▸ Privacy e sicurezza ▸ Localizzazione ▸ PMD3Bar |
-| Icone delle app mancanti | Cache vuota o iPhone non raggiungibile durante il caricamento | Pulsante ↻ nel pannello App; cache in `~/Library/Caches/PMD3Bar/icons` (si può cancellare) |
+| "No devices" | iPhone not paired, locked or on another network | Connect the cable and tap Trust. For Wi-Fi: unlock it and put it on the same network |
+| iPhone in orange, "unreachable" | usbmuxd sees it over Wi-Fi but the iPhone doesn't answer (standby) | Unlock the iPhone; it refreshes by itself within 5 seconds |
+| Mirroring: "The viewer is not responding" | DDI not mounted, or Developer Mode off | **Mount** the DDI, check Developer Mode, then Retry |
+| Video freezes and restarts | The viewer restarts the stream by itself when no frames arrive (`no AU progress` in the log) | Normal now and then; if it happens often, use the cable |
+| Mirroring stops when unplugging the cable | The USB tunnel drops | The app restarts it over Wi-Fi by itself; if not, press ▶ |
+| Port 8081 instead of 8080 | 8080 is held by another process | `lsof -nP -iTCP:8080 -sTCP:LISTEN`; if it's a leftover `serve-web` see the next row |
+| `serve-web` still running after quitting | The app was force-quit | `pkill -INT -f 'pymobiledevice3 developer core-device display serve-web'` |
+| The iPhone stays at a simulated location | The app was force-quit with location active | Tools ▸ Location ▸ **Restore real**, or `PYMOBILEDEVICE3_UDID=<UDID> build/python/bin/python3 -I -m pymobiledevice3 developer dvt simulate-location clear` |
+| `ModuleNotFoundError: No module named 'importlib'` in the log | The app was rebuilt while running | Already handled: `make run` and `make install` quit the app first. Restart it |
+| Pip can't update (Permission denied) | Files created by root, after using `sudo` with pymobiledevice3 | `sudo rm -rf` the folder named in the error; then never use `sudo` again |
+| "Python with pymobiledevice3 not found" | `build/python` is missing (with `make dev`, the conda env is missing) | `make python`, or set `PMD3_PYTHON=/path/to/python` |
+| In iPhone-only mode the toolbar or panels come back, or the screen is small | A new viewer version changed ids or size calculation | `make check-static` flags it; update `layoutJS` in `WebView.swift` |
+| Recording doesn't start | The viewer changed (canvas `c`), or the stream isn't active yet | Wait for the video; see item 4 of the [check](#43-checking-after-the-update) |
+| "Screen streaming needs iOS 27.0 or later" | iPhone on iOS earlier than 27 | Normal: for that iPhone use Tools (🔧 button) |
+| No notifications | Permission denied, or app started with `make dev` | System Settings ▸ Notifications ▸ PMD3Bar; use the built app |
+| ⌥⌘M does nothing | Shortcut already used by another app, or turned off | Menu ▸ Settings: a red message shows if registration failed |
+| Old or generic icon in Dock or Finder | macOS icon cache | `make install` re-registers the app with a new build number; if that's not enough: `killall Dock` |
+| Generic icon only in **notifications** | Notification Center stores the icon **per bundle ID** the first time it sees the app, and never updates it (its database is protected: restarting processes or changing version doesn't clear it) | Only fix: change `CFBundleIdentifier` in `Resources/Info.plist`, migrating settings as `migrateLegacyDefaults()` in `PMD3BarApp.swift` does. Done once already (`local.experiments.PMD3Bar` → `local.pmd3bar.PMD3Bar`). To avoid it: change the icon *before* the first notification |
+| The Location map doesn't show where the iPhone is | The iPhone's real location can't be read (see README, Known limitations) | The map starts from the Mac ("This Mac") or from the last simulated location; the ◎ button centers on the Mac |
+| "Mac location unavailable" | Location permission denied to PMD3Bar | System Settings ▸ Privacy & Security ▸ Location Services ▸ PMD3Bar |
+| App icons missing | Empty cache or iPhone unreachable while loading | ↻ button in the Apps panel; cache in `~/Library/Caches/PMD3Bar/icons` (safe to delete) |
 
-## 9. Regole da rispettare
+## 9. Rules to follow
 
-1. **Mai `sudo`** con pymobiledevice3 o con pip: crea file di proprietà di root che poi bloccano
-   gli aggiornamenti. L'unico caso che lo richiede è `remote tunneld`, che PMD3Bar non usa.
-2. **Mai modificare** i file dentro `build/python` o dentro `site-packages`: il prossimo
-   `make python` li sovrascrive. Le modifiche vanno nei sorgenti del progetto o proposte a upstream.
-3. **Versioni fissate**: aggiorna pymobiledevice3 e Python apposta, uno alla volta, e fai sempre
-   la [verifica](#43-verificare-dopo-laggiornamento) dopo.
-4. **Esposizione in rete**: i viewer ascoltano solo su `127.0.0.1`. Chi raggiunge la porta può
-   vedere e **controllare** l'iPhone: non esporla in rete senza password e HTTPS.
-5. **Repository privato**: se lo rendi pubblico, valgono gli obblighi della GPL (vedi sotto) e
-   conviene ricontrollare che nella storia non ci siano dati personali.
-6. **Distribuzione**: l'app include software GPL-3.0. Se la dai ad altri, va distribuita con
-   licenza GPL e con il codice sorgente.
+1. **Never `sudo`** with pymobiledevice3 or pip: it creates root-owned files that then block
+   updates. The only case that needs it is `remote tunneld`, which PMD3Bar doesn't use.
+2. **Never modify** files inside `build/python` or `site-packages`: the next `make python`
+   overwrites them. Changes go in the project sources or upstream.
+3. **Pinned versions**: update pymobiledevice3 and Python deliberately, one at a time, and always
+   run the [check](#43-checking-after-the-update) afterwards.
+4. **Network exposure**: the viewers listen on `127.0.0.1` only. Anyone who can reach the port can
+   see and **control** the iPhone: don't expose it on the network without a password and HTTPS.
+5. **Private repository**: if you make it public, the GPL obligations apply (see below), and it's
+   worth double-checking that the history contains no personal data.
+6. **Distribution**: the app bundles GPL-3.0 software. If you give it to others, it must be
+   distributed under the GPL together with the source code.
 
-## 10. Cambiare l'icona
+## 10. Changing the icon
 
-> Il Centro Notifiche tiene per sempre la prima icona che vede per un bundle ID. Dock e Finder si
-> aggiornano con `make install`; per le notifiche vedi la riga dedicata in
-> [Problemi frequenti](#8-problemi-frequenti).
+> Notification Center keeps forever the first icon it sees for a bundle ID. Dock and Finder
+> update with `make install`; for notifications see the dedicated row in
+> [Common problems](#8-common-problems).
 
-L'icona dell'app (Dock, Finder, Cmd-Tab, notifiche, Spotlight) nasce da `Resources/AppIcon-source.png`:
-un'immagine quadrata con il disegno su sfondo uniforme scuro.
+The app icon (Dock, Finder, Cmd-Tab, notifications, Spotlight) is generated from
+`Resources/AppIcon-source.png`: a square image with the artwork on a plain dark background.
 
 ```bash
-cp ~/Downloads/nuova-icona.png Resources/AppIcon-source.png
-make icon       # genera Resources/AppIcon.icns (16…1024 px) e Resources/AppIcon.png
-make install    # ricrea l'app e la registra di nuovo, così macOS non usa l'icona in cache
+cp ~/Downloads/new-icon.png Resources/AppIcon-source.png
+make icon       # generates Resources/AppIcon.icns (16…1024 px) and Resources/AppIcon.png
+make install    # rebuilds the app and re-registers it, so macOS doesn't use the cached icon
 ```
 
-`scripts/make-icon.py` toglie lo sfondo partendo dagli angoli: i colori scuri *dentro* il disegno
-restano. Il disegno viene adattato alla griglia delle icone macOS (corpo di 824 px su tela di
-1024, con ombra leggera). Se lo sfondo non è uniforme, va reso trasparente prima.
+`scripts/make-icon.py` removes the background starting from the corners: dark colors *inside*
+the artwork are kept. The artwork is fitted to the macOS icon grid (824 px body on a 1024 canvas,
+with a light shadow). If the background isn't uniform, make it transparent first.
 
-L'icona della **barra dei menu** è diversa: è un template monocromatico disegnato in codice
-(`Sources/PMD3Bar/MenuBarIcon.swift`), perché macOS la colora da solo per tema chiaro e scuro.
-Ha tre varianti: normale, mirroring attivo (pallino) e nessun iPhone (attenuata).
+The **menu bar** icon is different: it's a monochrome template drawn in code
+(`Sources/PMD3Bar/App/MenuBarIcon.swift`), because macOS tints it by itself for light and dark
+mode. It has three variants: normal, mirroring active (dot) and no iPhone (dimmed).
