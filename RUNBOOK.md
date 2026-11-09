@@ -18,6 +18,7 @@ cd /Users/anepoti/workspace/experiments/PMD3Bar
 - [7. Log e diagnosi](#7-log-e-diagnosi)
 - [8. Problemi frequenti](#8-problemi-frequenti)
 - [9. Regole da rispettare](#9-regole-da-rispettare)
+- [10. Cambiare l'icona](#10-cambiare-licona)
 
 ---
 
@@ -241,6 +242,7 @@ Se cambi la versione minore di Python (per esempio da 3.12 a 3.13), aggiorna anc
 | "Screen streaming needs iOS 27.0 or later" | iPhone con iOS precedente al 27 | Normale: per quell'iPhone usa gli Strumenti (pulsante 🔧) |
 | Nessuna notifica | Permesso negato, oppure app avviata con `make dev` | Impostazioni di Sistema ▸ Notifiche ▸ PMD3Bar; usa l'app compilata |
 | ⌥⌘M non fa niente | Scorciatoia già usata da un'altra app, oppure disattivata | Menu ▸ Impostazioni: c'è un messaggio rosso se la registrazione è fallita |
+| Icona vecchia o generica in Dock, Finder o notifiche | Cache delle icone di macOS | `make install` registra di nuovo l'app; se non basta: `killall Dock NotificationCenter` |
 | Icone delle app mancanti | Cache vuota o iPhone non raggiungibile durante il caricamento | Pulsante ↻ nel pannello App; cache in `~/Library/Caches/PMD3Bar/icons` (si può cancellare) |
 
 ## 9. Regole da rispettare
@@ -255,3 +257,22 @@ Se cambi la versione minore di Python (per esempio da 3.12 a 3.13), aggiorna anc
    vedere e **controllare** l'iPhone: non esporla in rete senza password e HTTPS.
 5. **Distribuzione**: l'app include software GPL-3.0. Se la dai ad altri, va distribuita con
    licenza GPL e con il codice sorgente.
+
+## 10. Cambiare l'icona
+
+L'icona dell'app (Dock, Finder, Cmd-Tab, notifiche, Spotlight) nasce da `Resources/AppIcon-source.png`:
+un'immagine quadrata con il disegno su sfondo uniforme scuro.
+
+```bash
+cp ~/Downloads/nuova-icona.png Resources/AppIcon-source.png
+make icon       # genera Resources/AppIcon.icns (16…1024 px) e Resources/AppIcon.png
+make install    # ricrea l'app e la registra di nuovo, così macOS non usa l'icona in cache
+```
+
+`scripts/make-icon.py` toglie lo sfondo partendo dagli angoli: i colori scuri *dentro* il disegno
+restano. Il disegno viene adattato alla griglia delle icone macOS (corpo di 824 px su tela di
+1024, con ombra leggera). Se lo sfondo non è uniforme, va reso trasparente prima.
+
+L'icona della **barra dei menu** è diversa: è un template monocromatico disegnato in codice
+(`Sources/PMD3Bar/MenuBarIcon.swift`), perché macOS la colora da solo per tema chiaro e scuro.
+Ha tre varianti: normale, mirroring attivo (pallino) e nessun iPhone (attenuata).

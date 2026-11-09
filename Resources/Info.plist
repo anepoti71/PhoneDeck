@@ -8,6 +8,8 @@
     <string>PMD3Bar</string>
     <key>CFBundleIdentifier</key>
     <string>local.experiments.PMD3Bar</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleExecutable</key>
     <string>PMD3Bar</string>
     <key>CFBundlePackageType</key>

@@ -1,5 +1,7 @@
 # PMD3Bar
 
+<img src="Resources/AppIcon.png" width="128" alt="Icona di PMD3Bar">
+
 App per la barra dei menu di macOS per vedere e controllare uno o più iPhone dal Mac, via cavo o Wi-Fi.
 Usa [pymobiledevice3](https://github.com/doronz88/pymobiledevice3), incluso nell'app con un suo
 Python: non servono `sudo`, `tunneld` né il terminale.
@@ -102,12 +104,16 @@ PMD3Bar.app/Contents/
 | `Sources/PMD3Bar/PMD3.swift` | Ricerca del Python, esecuzione dei comandi, log |
 | `Sources/PMD3Bar/Models.swift` | Lettura del JSON, stati |
 | `Sources/PMD3Bar/Integrations.swift` | Notifiche, scorciatoia globale ⌥⌘M, avvio al login |
+| `Sources/PMD3Bar/MenuBarIcon.swift` | Icona della barra dei menu (template monocromatico, una variante per stato) |
 | `Resources/pmd3bar_helper.py` | Funzioni Python aggiuntive (vedi sopra) |
-| `Resources/Info.plist` | Metadati del bundle (app della barra dei menu, `LSUIElement`) |
+| `Resources/Info.plist` | Metadati del bundle (app della barra dei menu, `LSUIElement`, icona) |
+| `Resources/AppIcon-source.png` | Disegno originale dell'icona |
+| `Resources/AppIcon.icns`, `AppIcon.png` | Icona dell'app generata da `make icon` |
+| `scripts/make-icon.py` | Scontorna il disegno e genera tutte le dimensioni dell'icona |
 | `scripts/fetch-python.sh` | Scarica CPython (sha256 verificato) e installa pymobiledevice3 |
 | `scripts/build-app.sh` | Compila, crea `build/PMD3Bar.app` e la firma ad-hoc |
 | `scripts/check.py` | Verifica che pymobiledevice3 offra tutto quello che l'app usa (`make check`) |
-| `Makefile` | Comandi `dev`, `python`, `app`, `run`, `install`, `check`, `check-static`, `clean` |
+| `Makefile` | Comandi `dev`, `python`, `app`, `run`, `install`, `check`, `check-static`, `icon`, `clean` |
 
 ## Limiti noti
 

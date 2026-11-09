@@ -1,4 +1,4 @@
-.PHONY: dev python app run install clean check check-static
+.PHONY: dev python app run install clean check check-static icon
 
 # Run from source, using $PMD3_PYTHON or ~/miniforge3/envs/pymobiledevice as the Python.
 dev:
@@ -23,6 +23,10 @@ check:
 check-static:
 	build/python/bin/python3 -I scripts/check.py --no-device
 
+# Rebuild Resources/AppIcon.icns from Resources/AppIcon-source.png (see scripts/make-icon.py).
+icon:
+	build/python/bin/python3 -I scripts/make-icon.py
+
 # Copy the app to ~/Applications.
 install: app
 	-pkill -INT -f "$(HOME)/Applications/PMD3Bar.app/Contents/MacOS/PMD3Bar"
@@ -30,6 +34,7 @@ install: app
 	mkdir -p "$(HOME)/Applications"
 	/bin/rm -rf "$(HOME)/Applications/PMD3Bar.app"
 	cp -a build/PMD3Bar.app "$(HOME)/Applications/PMD3Bar.app"
+	-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$(HOME)/Applications/PMD3Bar.app"
 	@echo "Installata in ~/Applications/PMD3Bar.app"
 
 clean:

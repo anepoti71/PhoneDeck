@@ -32,6 +32,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/PMD3Bar"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 cp "$ROOT/Resources/pmd3bar_helper.py" "$APP/Contents/Resources/pmd3bar_helper.py"
+cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 # -a keeps symlinks (python3 -> python3.12) and permissions
 cp -a "$PYDIR" "$APP/Contents/Resources/python"
 
@@ -45,6 +46,9 @@ find "$APP/Contents/Resources/python" -type f \( -name '*.so' -o -name '*.dylib'
     done
 codesign --force --sign - --timestamp=none "$APP"
 codesign --verify --strict "$APP" && echo "Firma OK"
+
+# Let Finder, Dock and notifications pick up the current icon instead of a cached one.
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP" 2>/dev/null || true
 
 du -sh "$APP"
 echo "Pronto: $APP"

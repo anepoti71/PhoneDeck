@@ -20,14 +20,14 @@ struct PMD3BarApp: App {
         MenuBarExtra {
             MenuView(model: model)
         } label: {
-            Image(systemName: menuIcon)
+            Image(nsImage: MenuBarIcon.image(menuIconState))
         }
         .menuBarExtraStyle(.window)
     }
 
-    private var menuIcon: String {
-        if !model.activeSessions.isEmpty { return "iphone.radiowaves.left.and.right" }
-        return model.devices.isEmpty ? "iphone.slash" : "iphone"
+    private var menuIconState: MenuBarIcon.State {
+        if !model.activeSessions.isEmpty { return .mirroring }
+        return model.devices.contains(where: \.reachable) ? .idle : .noDevice
     }
 }
 
