@@ -1,6 +1,8 @@
 import AppKit
 import Carbon.HIToolbox
+import CoreLocation
 import Foundation
+import Observation
 import ServiceManagement
 import UserNotifications
 
@@ -84,6 +86,69 @@ enum LoginItem {
             return nil
         } catch {
             return error.localizedDescription
+        }
+    }
+}
+
+// MARK: - Mac location
+
+/// The Mac's own position (Wi-Fi based). The iPhone's real GPS position can't be read over the
+/// developer services (they only set or clear a simulated one, and locationd redacts coordinates
+/// in the log), but a connected iPhone sits next to the Mac or on its Wi-Fi network.
+@MainActor
+@Observable
+final class MacLocation: NSObject, CLLocationManagerDelegate {
+    static let shared = MacLocation()
+
+    enum Status: Equatable { case idle, locating, located, denied, failed(String) }
+
+    private(set) var coordinate: CLLocationCoordinate2D?
+    private(set) var status: Status = .idle
+    @ObservationIgnored private lazy var manager: CLLocationManager = {
+        let m = CLLocationManager()
+        m.delegate = self
+        m.desiredAccuracy = kCLLocationAccuracyHundredMeters
+        return m
+    }()
+
+    /// Asks once for the current position (prompts for permission the first time).
+    func refresh() {
+        guard runningAsAppBundle else { status = .failed("disponibile solo nell'app compilata"); return }
+        switch manager.authorizationStatus {
+        case .denied, .restricted:
+            status = .denied
+        case .notDetermined:
+            status = .locating
+            manager.requestWhenInUseAuthorization()
+        default:
+            status = .locating
+            manager.requestLocation()
+        }
+    }
+
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let auth = manager.authorizationStatus
+        MainActor.assumeIsolated {
+            switch auth {
+            case .notDetermined: break
+            case .denied, .restricted: status = .denied
+            default: manager.requestLocation()
+            }
+        }
+    }
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let c = locations.last?.coordinate else { return }
+        MainActor.assumeIsolated {
+            coordinate = c
+            status = .located
+        }
+    }
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        let msg = error.localizedDescription
+        MainActor.assumeIsolated {
+            if coordinate == nil { status = .failed(msg) } else { status = .located }
         }
     }
 }

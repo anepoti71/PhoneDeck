@@ -28,6 +28,7 @@ Per installare, aggiornare e risolvere problemi vedi il **[RUNBOOK](RUNBOOK.md)*
   - **App**: elenco delle app installate con icone, installazione di `.ipa`, avvio, disinstallazione.
   - **File**: cartella Media dell'iPhone (foto in `DCIM`), con download, caricamento ed eliminazione.
   - **Posizione**: posizione GPS simulata, scelta sulla mappa. Quando chiudi la finestra torna quella reale.
+    La mappa parte dalla posizione del Mac o dall'ultima posizione simulata su quell'iPhone.
   - **Log**: log di sistema in tempo reale, con filtri ed esportazione.
 - Trascina un `.ipa` sulla finestra per installarlo, o altri file per copiarli sull'iPhone.
 
@@ -121,6 +122,9 @@ PMD3Bar.app/Contents/
   l'audio resta dentro il viewer.
 - Via Wi-Fi l'iPhone deve essere sbloccato o sveglio e sulla stessa rete. Il primo abbinamento richiede il cavo.
 - Posizione simulata e avvio delle app richiedono la DDI montata.
+- La posizione **reale** dell'iPhone non è leggibile dal Mac: i servizi per sviluppatori permettono
+  solo di impostare o cancellare quella simulata, e nei log di `locationd` le coordinate sono
+  oscurate. Per questo la mappa usa la posizione del Mac, che è vicino all'iPhone collegato.
 - La firma è ad-hoc: l'app va bene su questo Mac. Per darla ad altri servono firma Developer ID e notarizzazione.
 - L'app dipende da comandi e funzioni interne di pymobiledevice3: aggiornalo seguendo il [RUNBOOK](RUNBOOK.md#aggiornare-pymobiledevice3).
 

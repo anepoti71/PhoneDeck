@@ -215,6 +215,25 @@ final class DeviceTools {
     var locationState: LocationState = .off
     private var locationProcess: Process?
 
+    /// Last position simulated on this iPhone (kept across launches), to resume from it.
+    var lastSimulated: CLLocationCoordinate2D? {
+        get {
+            guard let v = UserDefaults.standard.array(forKey: "lastSimulatedLocation.\(udid)") as? [Double], v.count == 2
+            else { return nil }
+            return CLLocationCoordinate2D(latitude: v[0], longitude: v[1])
+        }
+        set {
+            access(keyPath: \.lastSimulated)
+            withMutation(keyPath: \.lastSimulated) {
+                if let c = newValue {
+                    UserDefaults.standard.set([c.latitude, c.longitude], forKey: "lastSimulatedLocation.\(udid)")
+                } else {
+                    UserDefaults.standard.removeObject(forKey: "lastSimulatedLocation.\(udid)")
+                }
+            }
+        }
+    }
+
     /// The simulated location lasts as long as the `simulate-location set` process runs.
     func setLocation(_ c: CLLocationCoordinate2D) {
         stopLocationProcess()
@@ -255,6 +274,7 @@ final class DeviceTools {
                 guard locationProcess === p else { return }
                 if String(decoding: box.data, as: UTF8.self).contains("Ctrl+C") {
                     locationState = .active(c)
+                    lastSimulated = c
                     report(String(format: "Posizione simulata: %.5f, %.5f", c.latitude, c.longitude))
                     return
                 }

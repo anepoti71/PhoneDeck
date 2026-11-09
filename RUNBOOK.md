@@ -243,6 +243,8 @@ Se cambi la versione minore di Python (per esempio da 3.12 a 3.13), aggiorna anc
 | Nessuna notifica | Permesso negato, oppure app avviata con `make dev` | Impostazioni di Sistema ▸ Notifiche ▸ PMD3Bar; usa l'app compilata |
 | ⌥⌘M non fa niente | Scorciatoia già usata da un'altra app, oppure disattivata | Menu ▸ Impostazioni: c'è un messaggio rosso se la registrazione è fallita |
 | Icona vecchia o generica in Dock, Finder o notifiche | Cache delle icone di macOS | `make install` registra di nuovo l'app; se non basta: `killall Dock NotificationCenter` |
+| La mappa della Posizione non mostra dove si trova l'iPhone | Non si può leggere la posizione reale dell'iPhone (vedi README, Limiti noti) | La mappa parte dal Mac ("Questo Mac") o dall'ultima posizione simulata; il pulsante ◎ centra sul Mac |
+| "Posizione del Mac non disponibile" | Permesso di localizzazione negato a PMD3Bar | Impostazioni di Sistema ▸ Privacy e sicurezza ▸ Localizzazione ▸ PMD3Bar |
 | Icone delle app mancanti | Cache vuota o iPhone non raggiungibile durante il caricamento | Pulsante ↻ nel pannello App; cache in `~/Library/Caches/PMD3Bar/icons` (si può cancellare) |
 
 ## 9. Regole da rispettare
