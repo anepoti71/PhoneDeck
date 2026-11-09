@@ -128,6 +128,9 @@ def static_checks() -> None:
         record('<canvas id="c"' in html, "viewer.html ha il canvas id=\"c\" (registrazione)",
                "canvas non trovato: va aggiornato bridgeJS in WebView.swift")
         record((viewer / "viewer.js").is_file(), "viewer.js presente")
+        record('id="brand-logo"' in html and 'id="brand"' in html,
+               "viewer.html ha #brand-logo e #brand (nascosti dall'app)",
+               "id cambiati: il logo di pymobiledevice3 ricomparirebbe, aggiorna styleJS in WebView.swift")
     except Exception as e:  # noqa: BLE001
         record(False, "risorse del viewer", str(e))
     root = Path(importlib.import_module("pymobiledevice3").__file__).parent

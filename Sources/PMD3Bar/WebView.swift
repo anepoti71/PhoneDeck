@@ -69,6 +69,7 @@ struct ViewerWebView: NSViewRepresentable {
         let ucc = config.userContentController
         ucc.add(context.coordinator, name: "pmd3bar")
         ucc.addUserScript(WKUserScript(source: Self.bridgeJS, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        ucc.addUserScript(WKUserScript(source: Self.styleJS, injectionTime: .atDocumentStart, forMainFrameOnly: true))
 
         let web = WKWebView(frame: .zero, configuration: config)
         web.navigationDelegate = context.coordinator
@@ -169,6 +170,16 @@ struct ViewerWebView: NSViewRepresentable {
             PMD3.log("[viewer] caricamento fallito: \(error.localizedDescription)")
         }
     }
+
+    /// Hides the viewer's pymobiledevice3 branding (logo + name) in the top bar; the window title
+    /// already names the iPhone. The keyboard and FPS chips stay. `make check` verifies these ids.
+    static let styleJS = #"""
+    (() => {
+      const style = document.createElement('style');
+      style.textContent = '#brand-logo, #brand { display: none !important; }';
+      document.documentElement.appendChild(style);
+    })();
+    """#
 
     /// Injected into the viewer: forwards console warnings/errors and records the screen canvas.
     /// The recording is video only (the viewer plays audio through its own private AudioContext).

@@ -200,7 +200,7 @@ struct MenuView: View {
                 Spacer()
                 Button("Esci") { NSApplication.shared.terminate(nil) }
             }
-            Text("pymobiledevice3 \(model.pmd3Version) · \(PMD3.python?.source.rawValue ?? "—")")
+            Text("pymobiledevice3 \(model.pmd3Version)")
                 .font(.caption2).foregroundStyle(.tertiary)
         }
     }
