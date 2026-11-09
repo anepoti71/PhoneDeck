@@ -222,6 +222,7 @@ Se cambi la versione minore di Python (per esempio da 3.12 a 3.13), aggiorna anc
 | Ricreare e avviare l'app | `make run` |
 | Solo controllare che compili | `swift build -c release --arch arm64` |
 | Lanciare i test della logica | `make test` (non serve l'iPhone) |
+| Salvare il lavoro su GitHub | `git push` (repository **privato** `anepoti71/PMD3Bar`) |
 | Provare `pmd3bar_helper.py` | `build/python/bin/python3 -I Resources/pmd3bar_helper.py list` |
 | Pulire | `make clean` (lascia `build/python`) |
 
@@ -288,7 +289,9 @@ Se cambi la versione minore di Python (per esempio da 3.12 a 3.13), aggiorna anc
    la [verifica](#43-verificare-dopo-laggiornamento) dopo.
 4. **Esposizione in rete**: i viewer ascoltano solo su `127.0.0.1`. Chi raggiunge la porta può
    vedere e **controllare** l'iPhone: non esporla in rete senza password e HTTPS.
-5. **Distribuzione**: l'app include software GPL-3.0. Se la dai ad altri, va distribuita con
+5. **Repository privato**: se lo rendi pubblico, valgono gli obblighi della GPL (vedi sotto) e
+   conviene ricontrollare che nella storia non ci siano dati personali.
+6. **Distribuzione**: l'app include software GPL-3.0. Se la dai ad altri, va distribuita con
    licenza GPL e con il codice sorgente.
 
 ## 10. Cambiare l'icona
