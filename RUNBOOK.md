@@ -83,9 +83,18 @@ build/python/bin/python3 -I Resources/pmd3bar_helper.py list
    - ⏺ registra lo schermo in `~/Download`;
    - 🧭 apre lo stesso viewer nel browser;
    - ■ ferma il mirroring;
-   - ▯ apre il pannello **Strumenti**: App, File, Posizione, Log. La finestra si allarga per
-     fargli posto e torna stretta quando lo chiudi.
-5. Chiudendo la finestra si ferma il mirroring di quell'iPhone e torna la sua posizione reale.
+   - ▯ apre il pannello **Strumenti**: App, File, Posizione, Condizioni, Processi, Crash, Log.
+     La finestra si allarga per fargli posto e torna stretta quando lo chiudi.
+     - **Condizioni** (rete lenta, stato termico, GPU): una alla volta; resta attiva finché la
+       finestra è aperta, poi l'iPhone torna normale. Richiede la DDI.
+     - **Processi**: un campionamento dura circa 10 s; "Ogni 15 s" lo ripete. Tasto destro per
+       chiudere un processo. Richiede la DDI.
+     - **Crash**: doppio clic per leggere un report, tasto destro per scaricarlo o eliminarlo.
+5. **Griglia**: con almeno due iPhone con iOS 27 o successivo, menu ▸ **Tutti in griglia** li mostra
+   affiancati in un'unica finestra (avvia il mirroring dove serve e lo ferma alla chiusura, tranne per
+   gli iPhone con la loro finestra aperta). Da terminale: `open ~/Applications/PMD3Bar.app --args --grid`.
+6. Chiudendo la finestra si fermano il mirroring di quell'iPhone (salvo che sia nella griglia), la
+   condizione attiva e la posizione simulata.
 
 Porte: il primo iPhone usa la "Porta iniziale" impostata nel menu (8080 se non la cambi), gli altri
 le successive libere.
@@ -112,11 +121,23 @@ build/python/bin/python3 -I -m pip index versions pymobiledevice3 | head -1
 ```
 Novità e note di rilascio: https://github.com/doronz88/pymobiledevice3/releases
 
+Quando esce una versione nuova, l'app lo segnala nel menu ("Disponibile la …") e con una notifica.
+Il pulsante **Copia comando** copia il comando di aggiornamento, da lanciare nella cartella del progetto.
+
 ### 4.2 Aggiornare
 ```bash
 PMD3_VERSION=11.51.0 make python     # sostituisci con la versione voluta
 make install
 ```
+
+`make python` è **sicuro**:
+1. installa la nuova versione in `build/python.new`;
+2. lancia la verifica statica (`check.py --no-device`). Con `CHECK_DEVICE=1` lancia anche quella
+   sul dispositivo, se c'è un iPhone collegato;
+3. solo se passa, sposta la versione attuale in `build/python.prev` e mette in uso la nuova.
+
+Se la verifica fallisce, `build/python` (e quindi l'app) resta com'era. La versione scartata rimane
+in `build/python.new` per indagare, e `FORCE=1` la installa comunque.
 
 Per provare una correzione non ancora rilasciata, usa il `master` di GitHub:
 ```bash
@@ -125,9 +146,6 @@ PMD3_SPEC="git+https://github.com/doronz88/pymobiledevice3.git@master" make pyth
 
 Per rendere permanente la nuova versione, aggiorna `PMD3_VERSION` in `scripts/fetch-python.sh`.
 
-> **Attenzione:** `make python` cancella `build/python` *prima* di installare. Se l'installazione
-> fallisce, l'app compilata dopo non avrà Python. L'app già installata in `~/Applications` non
-> viene toccata finché non lanci `make install`.
 
 ### 4.3 Verificare dopo l'aggiornamento
 
@@ -175,8 +193,9 @@ $PY -m pymobiledevice3 syslog live -h | grep -E -- '--format|--no-info|--process
 
 ### 4.4 Tornare alla versione precedente
 ```bash
-PMD3_VERSION=11.50.3 make python && make install
+make python-rollback && make install     # scambia build/python con build/python.prev
 ```
+Rilanciandolo si torna alla versione nuova. In alternativa: `PMD3_VERSION=11.50.3 make python && make install`.
 
 ## 5. Aggiornare il Python incluso
 

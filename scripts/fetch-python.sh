@@ -2,17 +2,26 @@
 # Builds the Python runtime that ships inside PMD3Bar.app:
 # a relocatable CPython (astral-sh/python-build-standalone) with pymobiledevice3 installed into it.
 #
+# Safe update: everything is installed into build/python.new and verified with scripts/check.py.
+# Only if the check passes does it replace build/python; the previous one is kept in
+# build/python.prev (`make python-rollback` puts it back). If the check fails, build/python is
+# left untouched and build/python.new stays there for inspection.
+#
 # Output: build/python   (copied into PMD3Bar.app/Contents/Resources/python by build-app.sh)
 #
 # Overrides:
 #   PMD3_VERSION=11.50.3   pymobiledevice3 version from PyPI
 #   PMD3_SPEC="git+https://github.com/doronz88/pymobiledevice3.git@master"   any pip requirement instead
+#   CHECK_DEVICE=1         also run the device checks (an iPhone must be connected)
+#   FORCE=1                install even if the check fails
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="$ROOT/build"
 DOWNLOADS="$BUILD/downloads"
 PYDIR="$BUILD/python"
+NEWDIR="$BUILD/python.new"
+PREVDIR="$BUILD/python.prev"
 
 # Pinned runtime: CPython 3.12.15, python-build-standalone release 20261020, Apple Silicon.
 PBS_TAG="20261020"
@@ -39,26 +48,44 @@ fi
 echo "==> Verifico sha256"
 echo "$PBS_SHA256  $ARCHIVE" | shasum -a 256 -c -
 
-echo "==> Estraggo in build/python"
-/bin/rm -rf "$PYDIR"
+echo "==> Estraggo in build/python.new"
+/bin/rm -rf "$NEWDIR"
 EXTRACT="$(mktemp -d "$BUILD/extract.XXXXXX")"
 tar -xzf "$ARCHIVE" -C "$EXTRACT"
-mv "$EXTRACT/python" "$PYDIR"
+mv "$EXTRACT/python" "$NEWDIR"
 /bin/rmdir "$EXTRACT"
 
-PY="$PYDIR/bin/python3"
+PY="$NEWDIR/bin/python3"
 echo "==> Installo $PMD3_SPEC"
 PYTHONNOUSERSITE=1 "$PY" -I -m pip install --disable-pip-version-check --no-warn-script-location \
     --upgrade "$PMD3_SPEC"
 
 echo "==> Pulizia e precompilazione"
 # Drop what the app never uses, then precompile so the signed bundle never needs to write .pyc files.
-/bin/rm -rf "$PYDIR"/lib/python3.12/test "$PYDIR"/lib/python3.12/idlelib "$PYDIR"/lib/python3.12/tkinter \
-    "$PYDIR"/lib/python3.12/turtledemo "$PYDIR"/lib/tcl* "$PYDIR"/lib/tk* "$PYDIR"/lib/itcl* "$PYDIR"/lib/thread* \
-    "$PYDIR"/share
-find "$PYDIR" -name '__pycache__' -type d -prune -exec /bin/rm -rf {} +
-"$PY" -I -m compileall -q -j 0 "$PYDIR/lib/python3.12" >/dev/null || true
+/bin/rm -rf "$NEWDIR"/lib/python3.12/test "$NEWDIR"/lib/python3.12/idlelib "$NEWDIR"/lib/python3.12/tkinter \
+    "$NEWDIR"/lib/python3.12/turtledemo "$NEWDIR"/lib/tcl* "$NEWDIR"/lib/tk* "$NEWDIR"/lib/itcl* "$NEWDIR"/lib/thread* \
+    "$NEWDIR"/share
+find "$NEWDIR" -name '__pycache__' -type d -prune -exec /bin/rm -rf {} +
+"$PY" -I -m compileall -q -j 0 "$NEWDIR/lib/python3.12" >/dev/null || true
 
-echo "==> Verifica"
-PYTHONNOUSERSITE=1 "$PY" -I -m pymobiledevice3 version
+echo "==> Verifica della nuova versione"
+CHECK_ARGS=(--no-device)
+[[ "${CHECK_DEVICE:-0}" == "1" ]] && CHECK_ARGS=()
+if ! "$PY" -I "$ROOT/scripts/check.py" "${CHECK_ARGS[@]}"; then
+    if [[ "${FORCE:-0}" != "1" ]]; then
+        echo >&2
+        echo "Verifica fallita: build/python NON è stato toccato (l'app resta com'era)." >&2
+        echo "La nuova versione è in build/python.new per indagare; FORCE=1 per installarla comunque." >&2
+        exit 1
+    fi
+    echo "FORCE=1: installo nonostante la verifica fallita." >&2
+fi
+
+echo "==> Sostituisco build/python (la precedente resta in build/python.prev)"
+/bin/rm -rf "$PREVDIR"
+[[ -d "$PYDIR" ]] && mv "$PYDIR" "$PREVDIR"
+mv "$NEWDIR" "$PYDIR"
+
+PYTHONNOUSERSITE=1 "$PYDIR/bin/python3" -I -m pymobiledevice3 version
 du -sh "$PYDIR"
+echo "Fatto. Ora 'make install' per aggiornare l'app."

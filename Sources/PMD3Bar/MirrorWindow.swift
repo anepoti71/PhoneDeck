@@ -127,25 +127,136 @@ final class MirrorWindows: NSObject, NSWindowDelegate {
         w.makeKeyAndOrderFront(nil)
     }
 
+    // MARK: Grid
+
+    private var gridWindow: NSWindow?
+    /// Sessions the grid started itself: closing the grid stops them unless they have their own window.
+    private var gridStarted: Set<String> = []
+
+    /// One window with every iPhone that can be mirrored, side by side, showing only the iPhones.
+    func showGrid() {
+        guard let model else { return }
+        for d in model.devices where d.reachable && d.supportsMirroring {
+            let s = model.session(for: d.id)
+            if !s.isActive {
+                model.startMirroring(d.id)
+                gridStarted.insert(d.id)
+            }
+        }
+        if let w = gridWindow { activate(w); return }
+        let w = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1100, height: 820),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered, defer: false)
+        w.title = "Tutti gli iPhone"
+        w.contentViewController = NSHostingController(rootView: GridView(model: model))
+        w.isReleasedWhenClosed = false
+        w.delegate = self
+        w.setFrameAutosaveName("PMD3Bar.grid")
+        if !w.setFrameUsingName("PMD3Bar.grid") { w.center() }
+        w.identifier = NSUserInterfaceItemIdentifier(Self.gridID)
+        gridWindow = w
+        NSApp.setActivationPolicy(.regular)
+        activate(w)
+    }
+
+    private static let gridID = "PMD3Bar.grid"
+
     func windowWillClose(_ notification: Notification) {
-        guard let w = notification.object as? NSWindow, let udid = w.identifier?.rawValue else { return }
+        guard let w = notification.object as? NSWindow, let id = w.identifier?.rawValue else { return }
+        if id == Self.gridID {
+            gridWindow = nil
+            for udid in gridStarted where windows[udid] == nil { model?.stopMirroring(udid) }
+            gridStarted.removeAll()
+            if windows.isEmpty { NSApp.setActivationPolicy(.accessory) }
+            return
+        }
+        let udid = id
+        gridStarted.remove(udid)
         windows[udid] = nil
         fits[udid] = nil
-        model?.closeWindow(udid)
-        if windows.isEmpty { NSApp.setActivationPolicy(.accessory) }
+        // The grid may still be showing this iPhone: keep its stream then.
+        model?.closeWindow(udid, keepMirroring: gridWindow != nil)
+        if windows.isEmpty && gridWindow == nil { NSApp.setActivationPolicy(.accessory) }
     }
+}
+
+// MARK: - Grid content
+
+struct GridView: View {
+    let model: AppModel
+    /// One viewer controller per iPhone, made on first use. A plain (unobserved) cache, so a cell
+    /// can create its controller while rendering instead of waiting for onAppear/onChange.
+    @State private var cache = ControllerCache()
+
+    final class ControllerCache {
+        private var controllers: [String: ViewerController] = [:]
+        @MainActor func controller(for udid: String, name: String) -> ViewerController {
+            if let c = controllers[udid] { return c }
+            let c = ViewerController(deviceOnly: true, persistMode: false)  // grid: only the iPhones
+            c.deviceName = name
+            controllers[udid] = c
+            return c
+        }
+    }
+
+    private var sessions: [MirrorSession] { model.activeSessions }
+
+    var body: some View {
+        Group {
+            if sessions.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: "iphone.slash").font(.system(size: 40)).foregroundStyle(.secondary)
+                    Text("Nessun iPhone in mirroring").foregroundStyle(.white)
+                    Text("Servono iPhone con iOS \(Device.mirrorMinimumIOS) o successivo, raggiungibili.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                HStack(spacing: 1) {
+                    ForEach(sessions) { s in cell(s) }
+                }
+            }
+        }
+        .background(Color.black)
+    }
+
+    @ViewBuilder private func cell(_ s: MirrorSession) -> some View {
+        VStack(spacing: 4) {
+            HStack {
+                Text(model.device(s.udid)?.name ?? "iPhone").font(.caption.weight(.semibold))
+                Spacer()
+                Button { MirrorWindows.shared.show(s.udid) } label: { Image(systemName: "macwindow") }
+                    .buttonStyle(.borderless).help("Apri nella sua finestra (con gli Strumenti)")
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10).padding(.top, 6)
+            if s.state == .running {
+                ViewerWebView(url: s.viewerURL, generation: s.generation,
+                              controller: cache.controller(for: s.udid, name: model.device(s.udid)?.name ?? "iPhone"))
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).environment(\.colorScheme, .dark)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
 }
 
 // MARK: - Window content
 
 enum ToolTab: String, CaseIterable, Identifiable {
-    case apps = "App", files = "File", location = "Posizione", log = "Log"
+    case apps = "App", files = "File", location = "Posizione", conditions = "Condizioni",
+         processes = "Processi", crashes = "Crash", log = "Log"
     var id: String { rawValue }
     var icon: String {
         switch self {
         case .apps: return "square.grid.2x2"
         case .files: return "folder"
         case .location: return "location"
+        case .conditions: return "gauge.with.dots.needle.33percent"
+        case .processes: return "cpu"
+        case .crashes: return "exclamationmark.triangle"
         case .log: return "text.alignleft"
         }
     }
@@ -353,16 +464,22 @@ struct ToolsPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             Picker("", selection: $tab) {
-                ForEach(ToolTab.allCases) { t in Label(t.rawValue, systemImage: t.icon).tag(t) }
+                ForEach(ToolTab.allCases) { t in
+                    Image(systemName: t.icon).help(t.rawValue).tag(t)
+                }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .padding(10)
+            .padding(.horizontal, 10).padding(.top, 10)
+            Text(tab.rawValue).font(.headline).padding(.vertical, 6)
             Divider()
             switch tab {
             case .apps: AppsTab(tools: tools)
             case .files: FilesTab(tools: tools)
             case .location: LocationTab(model: model, tools: tools, udid: udid)
+            case .conditions: ConditionsTab(model: model, tool: tools.conditions, udid: udid)
+            case .processes: ProcessesTab(tool: tools.processes)
+            case .crashes: CrashesTab(tool: tools.crashes)
             case .log: LogTab(tools: tools)
             }
         }
@@ -728,5 +845,272 @@ private struct LogTab: View {
         case "DEFAULT", "NOTICE": return .primary
         default: return .secondary
         }
+    }
+}
+
+// MARK: - Conditions / Processes / Crashes tabs
+
+/// Shown on tabs whose commands need the Developer Disk Image.
+private struct NeedsDDI: View {
+    let model: AppModel
+    let udid: String
+    var body: some View {
+        if model.mountStates[udid] == .notMounted {
+            HStack {
+                Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
+                Text("Serve la Developer Disk Image").font(.caption)
+                Spacer()
+                Button("Monta") { Task { await model.mount(udid) } }
+            }
+        }
+    }
+}
+
+private struct ConditionsTab: View {
+    let model: AppModel
+    @Bindable var tool: ConditionsTool
+    let udid: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            NeedsDDI(model: model, udid: udid)
+            HStack {
+                status
+                Spacer()
+                if case .active = tool.state {
+                    Button("Disattiva") { tool.deactivate() }
+                } else if case .starting = tool.state {
+                    Button("Annulla") { tool.deactivate() }
+                }
+                Button { Task { await tool.refresh() } } label: { Image(systemName: "arrow.clockwise") }.help("Aggiorna")
+            }
+            if let err = tool.error { Text(err).font(.caption).foregroundStyle(.red) }
+            List {
+                ForEach(tool.groups) { group in
+                    Section(Self.title(group)) {
+                        ForEach(group.profiles) { profile in
+                            HStack {
+                                Text(profile.name)
+                                Spacer()
+                                if isCurrent(profile) {
+                                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                                } else {
+                                    Button("Attiva") { tool.activate(profile) }
+                                        .controlSize(.small)
+                                        .disabled(isStarting)
+                                }
+                            }
+                            .help(profile.description ?? profile.name)
+                        }
+                    }
+                }
+            }
+            .overlay { if tool.loading && tool.groups.isEmpty { ProgressView() } }
+            Text("Una condizione alla volta. Resta attiva finché la finestra è aperta; chiudendola l'iPhone torna normale.")
+                .font(.caption2).foregroundStyle(.secondary)
+        }
+        .padding(10)
+        .task { if tool.groups.isEmpty { await tool.refresh() } }
+    }
+
+    private static func title(_ g: ConditionsTool.Group) -> String {
+        switch g.identifier {
+        case "SlowNetworkCondition": return "Rete"
+        case "ThermalCondition": return "Stato termico"
+        case "GPUPerformanceState": return "Prestazioni GPU"
+        default: return g.name
+        }
+    }
+
+    private var isStarting: Bool { if case .starting = tool.state { return true }; return false }
+
+    private func isCurrent(_ p: ConditionsTool.Profile) -> Bool {
+        switch tool.state {
+        case .active(let a), .starting(let a): return a == p
+        default: return false
+        }
+    }
+
+    @ViewBuilder private var status: some View {
+        switch tool.state {
+        case .off: Label("Nessuna condizione", systemImage: "circle").foregroundStyle(.secondary).font(.caption)
+        case .starting(let p): Label("Attivo \(p.name)…", systemImage: "hourglass").font(.caption)
+        case .active(let p): Label(p.name, systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.caption)
+        case .failed(let msg): Text(msg).foregroundStyle(.red).font(.caption).lineLimit(2)
+        }
+    }
+}
+
+private struct ProcessesTab: View {
+    @Bindable var tool: ProcessesTool
+    @State private var search = ""
+    @State private var sortOrder = [KeyPathComparator(\ProcessesTool.Proc.cpu, order: .reverse)]
+    @State private var confirmKill: ProcessesTool.Proc?
+
+    private var rows: [ProcessesTool.Proc] {
+        let filtered = search.isEmpty ? tool.processes
+            : tool.processes.filter { $0.name.localizedCaseInsensitiveContains(search) || String($0.pid) == search }
+        return filtered.sorted(using: sortOrder)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                TextField("Cerca", text: $search).textFieldStyle(.roundedBorder)
+                Toggle("Ogni 15 s", isOn: $tool.autoRefresh).toggleStyle(.checkbox).font(.caption)
+                if tool.loading {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button { Task { await tool.refresh() } } label: { Image(systemName: "arrow.clockwise") }.help("Aggiorna")
+                }
+            }
+            if let err = tool.error { Text(err).font(.caption).foregroundStyle(.red) }
+            Table(rows, sortOrder: $sortOrder) {
+                TableColumn("Processo", value: \.name) { p in Text(p.name).lineLimit(1) }
+                TableColumn("PID", value: \.pid) { p in Text(String(p.pid)).monospacedDigit() }
+                    .width(50)
+                TableColumn("CPU", value: \.cpu) { p in Text(String(format: "%.1f%%", p.cpu)).monospacedDigit() }
+                    .width(56)
+                TableColumn("Memoria", value: \.memory) { p in
+                    Text(ByteCountFormatter.string(fromByteCount: p.memory, countStyle: .memory)).monospacedDigit()
+                }
+                .width(70)
+            }
+            .contextMenu(forSelectionType: ProcessesTool.Proc.ID.self) { ids in
+                if let pid = ids.first, let p = tool.processes.first(where: { $0.pid == pid }) {
+                    Button("Chiudi \(p.name)…", role: .destructive) { confirmKill = p }
+                }
+            }
+            .overlay { if tool.loading && tool.processes.isEmpty { ProgressView("Campionamento…") } }
+            Text(footer).font(.caption2).foregroundStyle(.secondary)
+        }
+        .padding(10)
+        .task { if tool.processes.isEmpty { await tool.refresh() } }
+        .confirmationDialog("Chiudere \(confirmKill?.name ?? "")?", isPresented: .init(
+            get: { confirmKill != nil }, set: { if !$0 { confirmKill = nil } })
+        ) {
+            Button("Chiudi processo", role: .destructive) {
+                if let p = confirmKill { Task { await tool.kill(p) } }
+            }
+        } message: {
+            Text("Il processo viene terminato sull'iPhone. Le app si possono riaprire; i processi di sistema vengono riavviati da iOS.")
+        }
+    }
+
+    private var footer: String {
+        var s = "\(tool.processes.count) processi. Tasto destro per chiudere un processo. Richiede la Developer Disk Image."
+        if let t = tool.lastUpdate { s = "Aggiornato alle \(t.formatted(date: .omitted, time: .standard)). " + s }
+        return s
+    }
+}
+
+private struct CrashesTab: View {
+    @Bindable var tool: CrashesTool
+    @State private var confirmDelete: DeviceTools.FileEntry?
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Button { Task { await tool.open((tool.path as NSString).deletingLastPathComponent) } } label: {
+                    Image(systemName: "chevron.up")
+                }
+                .disabled(tool.path == "/").help("Cartella superiore")
+                Text(tool.path).font(.callout.monospaced()).lineLimit(1).truncationMode(.head)
+                Spacer()
+                Button { Task { await tool.refresh() } } label: { Image(systemName: "arrow.clockwise") }.help("Aggiorna")
+            }
+            if let err = tool.error { Text(err).font(.caption).foregroundStyle(.red) }
+            List(tool.entries) { e in
+                HStack {
+                    Image(systemName: e.dir ? "folder.fill" : "doc.text").foregroundStyle(e.dir ? Color.accentColor : .secondary)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(e.name).lineLimit(1).truncationMode(.middle)
+                        if let d = Self.date(e.mtime) {
+                            Text(d.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) {
+                    Task { e.dir ? await tool.open(tool.fullPath(e)) : await tool.show(e) }
+                }
+                .contextMenu {
+                    if e.dir {
+                        Button("Apri") { Task { await tool.open(tool.fullPath(e)) } }
+                    } else {
+                        Button("Mostra") { Task { await tool.show(e) } }
+                    }
+                    Button("Scarica in Download") { Task { await tool.download(e) } }
+                    Divider()
+                    Button("Elimina…", role: .destructive) { confirmDelete = e }
+                }
+            }
+            .overlay { if tool.loading && tool.entries.isEmpty { ProgressView() } }
+            Text("Report di crash e diagnostica dell'iPhone, dal più recente. Doppio clic per leggerli.")
+                .font(.caption2).foregroundStyle(.secondary)
+        }
+        .padding(10)
+        .task { if tool.entries.isEmpty { await tool.refresh() } }
+        .sheet(isPresented: .init(get: { tool.openedReport != nil }, set: { if !$0 { tool.openedReport = nil } })) {
+            if let rep = tool.openedReport { CrashReportSheet(name: rep.name, text: rep.text) { tool.openedReport = nil } }
+        }
+        .confirmationDialog("Eliminare \(confirmDelete?.name ?? "")?", isPresented: .init(
+            get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })
+        ) {
+            Button("Elimina", role: .destructive) { if let e = confirmDelete { Task { await tool.delete(e) } } }
+        } message: {
+            Text("Il report viene eliminato dall'iPhone.")
+        }
+    }
+
+    private static let iso: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withFullDate, .withTime, .withColonSeparatorInTime, .withDashSeparatorInDate, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoNoFraction: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withFullDate, .withTime, .withColonSeparatorInTime, .withDashSeparatorInDate]
+        return f
+    }()
+
+    /// The helper writes naive local times ("2026-11-09T11:05:09.123456").
+    static func date(_ s: String?) -> Date? {
+        guard let s else { return nil }
+        if let d = iso.date(from: s) ?? isoNoFraction.date(from: s) { return d }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        for fmt in ["yyyy-MM-dd'T'HH:mm:ss.SSSSSS", "yyyy-MM-dd'T'HH:mm:ss"] {
+            f.dateFormat = fmt
+            if let d = f.date(from: s) { return d }
+        }
+        return nil
+    }
+}
+
+private struct CrashReportSheet: View {
+    let name: String
+    let text: String
+    let close: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(name).font(.headline).lineLimit(1).truncationMode(.middle)
+                Spacer()
+                Button("Copia") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(text, forType: .string)
+                }
+                Button("Chiudi", action: close).keyboardShortcut(.cancelAction)
+            }
+            ScrollView([.vertical, .horizontal]) {
+                Text(text).font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(14)
+        .frame(minWidth: 640, minHeight: 480)
     }
 }

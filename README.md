@@ -19,6 +19,9 @@ Per installare, aggiornare e risolvere problemi vedi il **[RUNBOOK](RUNBOOK.md)*
   finisce o il mirroring si interrompe.
 - **Scorciatoia globale ⌥⌘M** per mostrare o nascondere la finestra dell'iPhone selezionato.
 - **Avvio al login**, attivabile dal menu (Impostazioni).
+- **Griglia**: tutti gli iPhone in mirroring affiancati in un'unica finestra.
+- **Avviso di aggiornamento**: segnala nel menu (e con una notifica) quando esce una nuova versione
+  di pymobiledevice3, con il comando per aggiornare.
 
 **In ogni finestra**
 - Schermo dell'iPhone in tempo reale, con audio, tocchi, tastiera, tasti fisici e appunti condivisi.
@@ -30,6 +33,9 @@ Per installare, aggiornare e risolvere problemi vedi il **[RUNBOOK](RUNBOOK.md)*
   - **App**: elenco delle app installate con icone, installazione di `.ipa`, avvio, disinstallazione.
   - **File**: cartella Media dell'iPhone (foto in `DCIM`), con download, caricamento ed eliminazione.
   - **Posizione**: posizione GPS simulata, scelta sulla mappa. Quando chiudi la finestra torna quella reale.
+  - **Condizioni**: rete lenta (3G, Edge, perdita di pacchetti…), stato termico, prestazioni GPU.
+  - **Processi**: CPU e memoria di ogni processo, con la possibilità di chiuderlo.
+  - **Crash**: report di crash e diagnostica, da leggere, scaricare o eliminare.
     La mappa parte dalla posizione del Mac o dall'ultima posizione simulata su quell'iPhone.
   - **Log**: log di sistema in tempo reale, con filtri ed esportazione.
 - Trascina un `.ipa` sulla finestra per installarlo, o altri file per copiarli sull'iPhone.
@@ -104,6 +110,7 @@ PMD3Bar.app/Contents/
 | `Sources/PMD3Bar/MirrorWindow.swift` | Finestra per iPhone e pannello Strumenti |
 | `Sources/PMD3Bar/WebView.swift` | WKWebView del viewer: download, registrazione, log della console |
 | `Sources/PMD3Bar/DeviceTools.swift` | App, file, posizione e log di sistema di un iPhone |
+| `Sources/PMD3Bar/Diagnostics.swift` | Condizioni, processi e crash report |
 | `Sources/PMD3Bar/PMD3.swift` | Ricerca del Python, esecuzione dei comandi, log |
 | `Sources/PMD3Bar/Models.swift` | Lettura del JSON, stati |
 | `Sources/PMD3Bar/Integrations.swift` | Notifiche, scorciatoia globale ⌥⌘M, avvio al login |
@@ -113,10 +120,10 @@ PMD3Bar.app/Contents/
 | `Resources/AppIcon-source.png` | Disegno originale dell'icona |
 | `Resources/AppIcon.icns`, `AppIcon.png` | Icona dell'app generata da `make icon` |
 | `scripts/make-icon.py` | Scontorna il disegno e genera tutte le dimensioni dell'icona |
-| `scripts/fetch-python.sh` | Scarica CPython (sha256 verificato) e installa pymobiledevice3 |
+| `scripts/fetch-python.sh` | Scarica CPython (sha256 verificato), installa pymobiledevice3 in `build/python.new` e lo mette in uso solo se supera `check.py` |
 | `scripts/build-app.sh` | Compila, crea `build/PMD3Bar.app` e la firma ad-hoc |
 | `scripts/check.py` | Verifica che pymobiledevice3 offra tutto quello che l'app usa (`make check`) |
-| `Makefile` | Comandi `dev`, `python`, `app`, `run`, `install`, `check`, `check-static`, `icon`, `clean` |
+| `Makefile` | Comandi `dev`, `python`, `python-rollback`, `app`, `run`, `install`, `check`, `check-static`, `icon`, `clean` |
 
 ## Limiti noti
 

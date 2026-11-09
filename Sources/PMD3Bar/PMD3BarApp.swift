@@ -11,6 +11,10 @@ struct PMD3BarApp: App {
         MirrorWindows.shared.model = model
         // `open PMD3Bar.app --args --open <UDID>` starts mirroring that iPhone in its window at launch.
         let args = CommandLine.arguments
+        if args.contains("--grid") {
+            // Give the first device listing time to arrive.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { MirrorWindows.shared.showGrid() }
+        }
         if args.contains("--test-notification") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { model.testNotification() }
         }
@@ -81,10 +85,16 @@ struct MenuView: View {
                     row(device)
                 }
             }
-            if model.activeSessions.count > 1 {
-                Button("Ferma tutti i mirroring") { for s in model.activeSessions { s.stop() } }
-                    .font(.caption)
+            HStack {
+                if model.devices.filter({ $0.reachable && $0.supportsMirroring }).count > 1 {
+                    Button("Tutti in griglia") { MirrorWindows.shared.showGrid() }
+                        .help("Una finestra con tutti gli iPhone affiancati")
+                }
+                if model.activeSessions.count > 1 {
+                    Button("Ferma tutti") { for s in model.activeSessions { s.stop() } }
+                }
             }
+            .font(.caption)
         }
     }
 
@@ -202,6 +212,20 @@ struct MenuView: View {
             }
             Text("pymobiledevice3 \(model.pmd3Version)")
                 .font(.caption2).foregroundStyle(.tertiary)
+            if model.updateAvailable, let latest = model.latestPMD3 {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.up.circle.fill").foregroundStyle(.blue)
+                    Text("Disponibile la \(latest)").font(.caption)
+                    Spacer()
+                    Button("Novità") { NSWorkspace.shared.open(AppModel.releasesURL) }
+                    Button("Copia comando") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString("PMD3_VERSION=\(latest) make python && make install", forType: .string)
+                    }
+                    .help("Da lanciare nella cartella del progetto: installa la nuova versione solo se supera la verifica")
+                }
+                .controlSize(.small)
+            }
         }
     }
 

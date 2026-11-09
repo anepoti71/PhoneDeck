@@ -28,9 +28,16 @@ final class ViewerController {
     /// the choice is remembered for the next windows.
     var deviceOnly: Bool = UserDefaults.standard.object(forKey: "deviceOnly") as? Bool ?? true {
         didSet {
-            UserDefaults.standard.set(deviceOnly, forKey: "deviceOnly")
+            if persistMode { UserDefaults.standard.set(deviceOnly, forKey: "deviceOnly") }
             applyLayout()
         }
+    }
+    /// The device windows remember the mode; the grid always shows only the iPhones.
+    @ObservationIgnored private let persistMode: Bool
+
+    init(deviceOnly: Bool? = nil, persistMode: Bool = true) {
+        self.persistMode = persistMode
+        if let deviceOnly { self.deviceOnly = deviceOnly }
     }
     fileprivate weak var webView: WKWebView?
     /// Width / height of the iPhone screen as streamed (changes with rotation).

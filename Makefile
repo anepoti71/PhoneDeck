@@ -1,4 +1,4 @@
-.PHONY: dev python app run install clean check check-static icon
+.PHONY: dev python python-rollback app run install clean check check-static icon
 
 # Run from source, using $PMD3_PYTHON or ~/miniforge3/envs/pymobiledevice as the Python.
 dev:
@@ -7,6 +7,13 @@ dev:
 # Download the pinned CPython and install pymobiledevice3 into build/python.
 python:
 	./scripts/fetch-python.sh
+
+# Put back the runtime that the last `make python` replaced (build/python.prev), and vice versa.
+python-rollback:
+	@test -d build/python.prev || { echo "Nessuna versione precedente in build/python.prev"; exit 1; }
+	mv build/python build/python.swap && mv build/python.prev build/python && mv build/python.swap build/python.prev
+	@build/python/bin/python3 -I -m pymobiledevice3 version
+	@echo "Ripristinata. Ora 'make install' per aggiornare l'app."
 
 # Build build/PMD3Bar.app (needs `make python` once).
 app:

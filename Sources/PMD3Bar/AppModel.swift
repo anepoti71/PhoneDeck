@@ -77,7 +77,14 @@ final class AppModel {
         startPolling()
         updateHotKey()
         if notificationsEnabled { Notifier.requestAuthorization() }
-        Task { await loadVersion() }
+        Task {
+            await loadVersion()
+            // Then look for a newer pymobiledevice3 now and every 12 hours.
+            while !Task.isCancelled {
+                await checkForUpdates()
+                try? await Task.sleep(for: .seconds(12 * 3600))
+            }
+        }
     }
 
     private func notify(_ title: String, _ body: String = "") {
@@ -250,8 +257,8 @@ final class AppModel {
     }
 
     /// Window closed: stop its stream and the tools it started (simulated location is cleared).
-    func closeWindow(_ udid: String) {
-        sessions[udid]?.stop()
+    func closeWindow(_ udid: String, keepMirroring: Bool = false) {
+        if !keepMirroring { sessions[udid]?.stop() }
         tools[udid]?.shutdown(clearLocation: true)
     }
 
@@ -287,6 +294,46 @@ final class AppModel {
     func setLaunchAtLogin(_ on: Bool) {
         settingsError = LoginItem.set(on)
         launchAtLogin = LoginItem.enabled
+    }
+
+    // MARK: pymobiledevice3 updates
+
+    /// Latest version on PyPI, when known.
+    var latestPMD3: String?
+    var updateAvailable: Bool {
+        guard let latest = latestPMD3 else { return false }
+        return Self.isVersion(latest, newerThan: pmd3Version)
+    }
+    static let releasesURL = URL(string: "https://github.com/doronz88/pymobiledevice3/releases")!
+
+    /// Asks PyPI for the latest pymobiledevice3 (public JSON API, nothing about the user is sent).
+    func checkForUpdates() async {
+        var request = URLRequest(url: URL(string: "https://pypi.org/pypi/pymobiledevice3/json")!)
+        request.timeoutInterval = 20
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let info = obj["info"] as? [String: Any], let version = info["version"] as? String
+        else { return }
+        latestPMD3 = version
+        guard updateAvailable else { return }
+        PMD3.log("pymobiledevice3 \(version) disponibile (incluso: \(pmd3Version))")
+        if UserDefaults.standard.string(forKey: "notifiedPMD3Version") != version {
+            UserDefaults.standard.set(version, forKey: "notifiedPMD3Version")
+            notify("pymobiledevice3 \(version) disponibile",
+                   "L'app include la \(pmd3Version). Per aggiornare: PMD3_VERSION=\(version) make python && make install")
+        }
+    }
+
+    /// Compares dotted numeric versions ("11.51.0" > "11.50.3"); non-numeric parts count as 0.
+    static func isVersion(_ a: String, newerThan b: String) -> Bool {
+        let pa = a.split(separator: ".").map { Int($0.prefix { $0.isNumber }) ?? 0 }
+        let pb = b.split(separator: ".").map { Int($0.prefix { $0.isNumber }) ?? 0 }
+        for i in 0..<max(pa.count, pb.count) {
+            let x = i < pa.count ? pa[i] : 0, y = i < pb.count ? pb[i] : 0
+            if x != y { return x > y }
+        }
+        return false
     }
 
     // MARK: Misc

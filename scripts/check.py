@@ -79,6 +79,12 @@ CLI = [
     (["afc", "push"], []),
     (["afc", "pull"], []),
     (["afc", "rm"], []),
+    (["developer", "dvt", "condition", "list"], []),
+    (["developer", "dvt", "condition", "set"], []),
+    (["developer", "dvt", "sysmon", "process", "single"], ["--key"]),
+    (["developer", "dvt", "kill"], []),
+    (["crash", "parse"], []),
+    (["crash", "pull"], []),
 ]
 
 # (module, attribute path, callable members it must have)
@@ -88,6 +94,8 @@ APIS = [
     ("pymobiledevice3.lockdown", "LockdownClient", ["short_info", "close"]),
     ("pymobiledevice3.services.afc", "AfcService", ["listdir", "stat", "__aenter__"]),
     ("pymobiledevice3.services.installation_proxy", "InstallationProxyService", ["get_apps", "__aenter__"]),
+    ("pymobiledevice3.services.crash_reports", "CrashReportsManager", ["COPY_MOBILE_NAME"]),
+    ("pymobiledevice3.services.springboard", "SpringBoardServicesService", ["get_icon_pngdata", "__aenter__"]),
 ]
 
 
@@ -141,7 +149,7 @@ def static_checks() -> None:
                "cambiato: aggiorna VIEWER_RESERVED_H in layoutJS (WebView.swift)")
         record('id="brand-logo"' in html and 'id="brand"' in html,
                "viewer.html ha #brand-logo e #brand (nascosti dall'app)",
-               "id cambiati: il logo di pymobiledevice3 ricomparirebbe, aggiorna styleJS in WebView.swift")
+               "id cambiati: il logo di pymobiledevice3 ricomparirebbe, aggiorna layoutJS in WebView.swift")
     except Exception as e:  # noqa: BLE001
         record(False, "risorse del viewer", str(e))
     root = Path(importlib.import_module("pymobiledevice3").__file__).parent
@@ -223,6 +231,13 @@ def device_checks(helper_path: str, udid: str | None, location: bool) -> None:
         record(bool(files) and {"name", "dir", "size"} <= set(files[0]), "helper afc-ls /")
     except Exception as e:  # noqa: BLE001
         record(False, "helper afc-ls /", str(e))
+
+    try:
+        crashes = helper(helper_path, "crash-ls", "/", udid=udid)
+        record(isinstance(crashes, list) and (not crashes or {"name", "dir", "size", "mtime"} <= set(crashes[0])),
+               f"helper crash-ls / ({len(crashes)} voci)")
+    except Exception as e:  # noqa: BLE001
+        record(False, "helper crash-ls /", str(e))
 
     try:
         apps = helper(helper_path, "apps", udid=udid, timeout=120)

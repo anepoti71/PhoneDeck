@@ -21,8 +21,16 @@ final class DeviceTools {
     /// Posts a system notification (set by AppModel, follows the Notifiche setting).
     var notify: (String, String) -> Void = { _, _ in }
 
+    @ObservationIgnored private(set) lazy var conditions = ConditionsTool(udid: udid) { [weak self] in self?.reportFromTool($0, $1, $2) }
+    @ObservationIgnored private(set) lazy var processes = ProcessesTool(udid: udid) { [weak self] in self?.reportFromTool($0, $1, $2) }
+    @ObservationIgnored private(set) lazy var crashes = CrashesTool(udid: udid) { [weak self] in self?.reportFromTool($0, $1, $2) }
+
     init(udid: String) {
         self.udid = udid
+    }
+
+    private func reportFromTool(_ text: String, _ isError: Bool, _ busy: Bool) {
+        if text.isEmpty { banner = nil } else { report(text, error: isError, busy: busy) }
     }
 
     private func report(_ text: String, error: Bool = false, busy: Bool = false) {
@@ -428,6 +436,8 @@ final class DeviceTools {
     /// Stops every long-running process (window closed or app quitting).
     func shutdown(clearLocation: Bool) {
         stopLog()
+        conditions.shutdown()
+        processes.shutdown()
         let hadLocation = locationProcess != nil
         stopLocationProcess()
         locationState = .off
