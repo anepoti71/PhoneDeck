@@ -2,6 +2,7 @@ import AppKit
 import CoreLocation
 import Foundation
 import Observation
+import PMD3BarCore
 
 /// pymobiledevice3 features the web viewer doesn't expose, for one iPhone:
 /// apps (install/launch/uninstall), files (/var/mobile/Media over AFC), simulated location, system log.

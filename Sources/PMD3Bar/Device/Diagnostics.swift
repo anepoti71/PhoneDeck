@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Observation
+import PMD3BarCore
 
 /// Shows a short message in the device window (DeviceTools.banner): text, isError, busy.
 typealias Reporter = (String, Bool, Bool) -> Void

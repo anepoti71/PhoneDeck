@@ -1,18 +1,7 @@
 import AppKit
 import SwiftUI
 import WebKit
-
-/// Geometry of the viewer page in "device only" mode, shared by the injected script and the
-/// window sizing (MirrorWindows): the screen gets the window height minus `ownReservedHeight`
-/// and needs `reservedWidth` of horizontal room next to it.
-enum ViewerLayout {
-    /// fitCanvasToViewport(): `reservedW = trays + 48 + 40` (trays are hidden in this mode).
-    static let reservedWidth: CGFloat = 88
-    /// Height kept for the stage padding once the top bar and button row are hidden.
-    static let ownReservedHeight: CGFloat = 24
-    /// fitCanvasToViewport(): `availH = innerHeight - 150`.
-    static let viewerReservedHeight: CGFloat = 150
-}
+import PMD3BarCore
 
 /// Controls a viewer web view from SwiftUI (recording, reload).
 @MainActor

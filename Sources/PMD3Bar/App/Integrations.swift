@@ -5,6 +5,7 @@ import Foundation
 import Observation
 import ServiceManagement
 import UserNotifications
+import PMD3BarCore
 
 /// True when running as a real .app bundle (not `swift run`): notifications and login items need one.
 let runningAsAppBundle: Bool = Bundle.main.bundleIdentifier != nil && Bundle.main.bundlePath.hasSuffix(".app")

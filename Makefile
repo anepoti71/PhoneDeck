@@ -1,4 +1,4 @@
-.PHONY: dev python python-rollback app run install clean check check-static icon
+.PHONY: dev python python-rollback app run install clean check check-static icon test
 
 # Run from source, using $PMD3_PYTHON or ~/miniforge3/envs/pymobiledevice as the Python.
 dev:
@@ -21,6 +21,10 @@ app:
 
 run: app
 	open build/PMD3Bar.app
+
+# Unit tests of the pure logic in Sources/PMD3BarCore (no iPhone needed).
+test:
+	swift run -c release --arch arm64 PMD3BarCoreTests
 
 # Verify the embedded pymobiledevice3 still provides what PMD3Bar uses (see RUNBOOK).
 # With an iPhone connected it also tests it; CHECK_ARGS="--location" tests the simulated location too.

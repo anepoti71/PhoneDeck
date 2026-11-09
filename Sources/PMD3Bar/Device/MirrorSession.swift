@@ -2,6 +2,7 @@ import AppKit
 import Darwin
 import Foundation
 import Observation
+import PMD3BarCore
 
 /// One `serve-web` process mirroring one iPhone on its own local port.
 /// Each process opens its own userspace tunnel, so several iPhones can be mirrored at once.

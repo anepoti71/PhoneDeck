@@ -102,28 +102,32 @@ PMD3Bar.app/Contents/
 
 ### Sorgenti
 
+```
+Sources/PMD3BarCore/        logica pura, senza interfaccia: provata da `make test`
+  Models.swift              Device e lettura dell'elenco iPhone, stati DDI e mirroring
+  RunResult.swift           esito di un comando e messaggio d'errore leggibile
+  Versions.swift            confronto delle versioni (avviso di aggiornamento)
+  ViewerLayout.swift        geometria del viewer e larghezza della finestra "solo iPhone"
+  DeviceDates.swift         date scritte dall'helper (report di crash)
+Sources/PMD3Bar/
+  App/                      avvio, menu della barra, stato, impostazioni, notifiche, icona del menu
+  Device/                   esecuzione di pymobiledevice3, sessioni di mirroring, strumenti per iPhone
+  Viewer/WebView.swift      WKWebView del viewer: layout, registrazione con audio, download
+  Windows/                  finestra di ogni iPhone, griglia, dimensionamento delle finestre
+  Tools/                    pannello Strumenti, una scheda per file
+Tests/PMD3BarCoreTests/     test della logica pura (`make test`)
+Resources/                  Info.plist, pmd3bar_helper.py, icone
+scripts/                    fetch-python.sh, build-app.sh, check.py, make-icon.py
+```
+
 | File | Contenuto |
 |---|---|
-| `Sources/PMD3Bar/PMD3BarApp.swift` | Avvio dell'app e menu (elenco iPhone, DDI, impostazioni) |
-| `Sources/PMD3Bar/AppModel.swift` | Stato: iPhone, DDI, sessioni di mirroring, strumenti |
-| `Sources/PMD3Bar/MirrorSession.swift` | Gestione di un processo `serve-web`: avvio, stop, riavvio, porta |
-| `Sources/PMD3Bar/MirrorWindow.swift` | Finestra per iPhone e pannello Strumenti |
-| `Sources/PMD3Bar/WebView.swift` | WKWebView del viewer: download, registrazione, log della console |
-| `Sources/PMD3Bar/DeviceTools.swift` | App, file, posizione e log di sistema di un iPhone |
-| `Sources/PMD3Bar/Diagnostics.swift` | Condizioni, processi e crash report |
-| `Sources/PMD3Bar/PMD3.swift` | Ricerca del Python, esecuzione dei comandi, log |
-| `Sources/PMD3Bar/Models.swift` | Lettura del JSON, stati |
-| `Sources/PMD3Bar/Integrations.swift` | Notifiche, scorciatoia globale ⌥⌘M, avvio al login |
-| `Sources/PMD3Bar/MenuBarIcon.swift` | Icona della barra dei menu (template monocromatico, una variante per stato) |
-| `Resources/pmd3bar_helper.py` | Funzioni Python aggiuntive (vedi sopra) |
-| `Resources/Info.plist` | Metadati del bundle (app della barra dei menu, `LSUIElement`, icona) |
-| `Resources/AppIcon-source.png` | Disegno originale dell'icona |
-| `Resources/AppIcon.icns`, `AppIcon.png` | Icona dell'app generata da `make icon` |
-| `scripts/make-icon.py` | Scontorna il disegno e genera tutte le dimensioni dell'icona |
+| `Resources/pmd3bar_helper.py` | Funzioni Python aggiuntive (elenco robusto, file, app, icone, crash) |
 | `scripts/fetch-python.sh` | Scarica CPython (sha256 verificato), installa pymobiledevice3 in `build/python.new` e lo mette in uso solo se supera `check.py` |
-| `scripts/build-app.sh` | Compila, crea `build/PMD3Bar.app` e la firma ad-hoc |
+| `scripts/build-app.sh` | Compila, crea `build/PMD3Bar.app`, numero di build, firma ad-hoc |
 | `scripts/check.py` | Verifica che pymobiledevice3 offra tutto quello che l'app usa (`make check`) |
-| `Makefile` | Comandi `dev`, `python`, `python-rollback`, `app`, `run`, `install`, `check`, `check-static`, `icon`, `clean` |
+| `scripts/make-icon.py` | Scontorna il disegno e genera tutte le dimensioni dell'icona (`make icon`) |
+| `Makefile` | `dev`, `python`, `python-rollback`, `app`, `run`, `install`, `test`, `check`, `check-static`, `icon`, `clean` |
 
 ## Limiti noti
 

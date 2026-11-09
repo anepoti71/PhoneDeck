@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Observation
+import PMD3BarCore
 
 @MainActor
 @Observable
@@ -302,7 +303,7 @@ final class AppModel {
     var latestPMD3: String?
     var updateAvailable: Bool {
         guard let latest = latestPMD3 else { return false }
-        return Self.isVersion(latest, newerThan: pmd3Version)
+        return Versions.isVersion(latest, newerThan: pmd3Version)
     }
     static let releasesURL = URL(string: "https://github.com/doronz88/pymobiledevice3/releases")!
 
@@ -323,17 +324,6 @@ final class AppModel {
             notify("pymobiledevice3 \(version) disponibile",
                    "L'app include la \(pmd3Version). Per aggiornare: PMD3_VERSION=\(version) make python && make install")
         }
-    }
-
-    /// Compares dotted numeric versions ("11.51.0" > "11.50.3"); non-numeric parts count as 0.
-    static func isVersion(_ a: String, newerThan b: String) -> Bool {
-        let pa = a.split(separator: ".").map { Int($0.prefix { $0.isNumber }) ?? 0 }
-        let pb = b.split(separator: ".").map { Int($0.prefix { $0.isNumber }) ?? 0 }
-        for i in 0..<max(pa.count, pb.count) {
-            let x = i < pa.count ? pa[i] : 0, y = i < pb.count ? pb[i] : 0
-            if x != y { return x > y }
-        }
-        return false
     }
 
     // MARK: Misc

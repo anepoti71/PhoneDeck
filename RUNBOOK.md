@@ -221,9 +221,14 @@ Se cambi la versione minore di Python (per esempio da 3.12 a 3.13), aggiorna anc
 | Provare una modifica Swift al volo | `make dev` (usa il conda env, non serve `make python`) |
 | Ricreare e avviare l'app | `make run` |
 | Solo controllare che compili | `swift build -c release --arch arm64` |
+| Lanciare i test della logica | `make test` (non serve l'iPhone) |
 | Provare `pmd3bar_helper.py` | `build/python/bin/python3 -I Resources/pmd3bar_helper.py list` |
 | Pulire | `make clean` (lascia `build/python`) |
 
+- La logica senza interfaccia (lettura del JSON, versioni, geometria, date) sta in
+  `Sources/PMD3BarCore` ed è coperta da `make test`. Se aggiungi logica di questo tipo, mettila lì
+  con un test in `Tests/PMD3BarCoreTests/main.swift`. I test sono un piccolo eseguibile perché
+  XCTest e swift-testing arrivano solo con Xcode; installando Xcode si possono convertire.
 - Gli errori di SourceKit nell'editor ("Cannot find type…") sono falsi positivi, perché l'editor
   non vede il pacchetto Swift. Fa fede `swift build`.
 - Il viewer web (HTML/JS/CSS) è dentro pymobiledevice3: non modificarlo lì, perché si perde al

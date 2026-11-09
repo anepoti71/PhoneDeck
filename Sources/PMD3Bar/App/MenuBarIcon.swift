@@ -1,4 +1,5 @@
 import AppKit
+import PMD3BarCore
 
 /// Menu bar icon: the app logo (a screen with an iPhone in front) as a monochrome template image,
 /// so macOS tints it for light/dark menu bars. One variant per state.

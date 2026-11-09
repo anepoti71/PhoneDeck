@@ -1,0 +1,66 @@
+import SwiftUI
+import PMD3BarCore
+
+enum ToolTab: String, CaseIterable, Identifiable {
+    case apps = "App", files = "File", location = "Posizione", conditions = "Condizioni",
+         processes = "Processi", crashes = "Crash", log = "Log"
+    var id: String { rawValue }
+    var icon: String {
+        switch self {
+        case .apps: return "square.grid.2x2"
+        case .files: return "folder"
+        case .location: return "location"
+        case .conditions: return "gauge.with.dots.needle.33percent"
+        case .processes: return "cpu"
+        case .crashes: return "exclamationmark.triangle"
+        case .log: return "text.alignleft"
+        }
+    }
+}
+
+struct ToolsPanel: View {
+    let model: AppModel
+    let tools: DeviceTools
+    let udid: String
+    @Binding var tab: ToolTab
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Picker("", selection: $tab) {
+                ForEach(ToolTab.allCases) { t in
+                    Image(systemName: t.icon).help(t.rawValue).tag(t)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 10).padding(.top, 10)
+            Text(tab.rawValue).font(.headline).padding(.vertical, 6)
+            Divider()
+            switch tab {
+            case .apps: AppsTab(tools: tools)
+            case .files: FilesTab(tools: tools)
+            case .location: LocationTab(model: model, tools: tools, udid: udid)
+            case .conditions: ConditionsTab(model: model, tool: tools.conditions, udid: udid)
+            case .processes: ProcessesTab(tool: tools.processes)
+            case .crashes: CrashesTab(tool: tools.crashes)
+            case .log: LogTab(tools: tools)
+            }
+        }
+    }
+}
+
+/// Shown on tabs whose commands need the Developer Disk Image.
+struct NeedsDDI: View {
+    let model: AppModel
+    let udid: String
+    var body: some View {
+        if model.mountStates[udid] == .notMounted {
+            HStack {
+                Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
+                Text("Serve la Developer Disk Image").font(.caption)
+                Spacer()
+                Button("Monta") { Task { await model.mount(udid) } }
+            }
+        }
+    }
+}

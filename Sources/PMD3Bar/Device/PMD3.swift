@@ -1,24 +1,5 @@
 import Foundation
-
-/// Result of a finished pymobiledevice3 command.
-struct RunResult {
-    let status: Int32
-    let stdout: Data
-    let stderr: String
-
-    var ok: Bool { status == 0 }
-
-    /// Short, human-readable error taken from the end of stderr (strips rich's box drawing).
-    var errorSummary: String {
-        let boxChars = CharacterSet(charactersIn: "│╭╰╮╯─ ")
-        let lines = stderr
-            .split(separator: "\n")
-            .map { $0.trimmingCharacters(in: boxChars) }
-            .filter { !$0.isEmpty && !$0.hasPrefix("Error") && !$0.hasPrefix("Usage") }
-        let tail = lines.suffix(2).joined(separator: " ")
-        return tail.isEmpty ? "Comando fallito (exit \(status))" : tail
-    }
-}
+import PMD3BarCore
 
 /// Locates the Python runtime and runs `python -m pymobiledevice3 ...`.
 enum PMD3 {
