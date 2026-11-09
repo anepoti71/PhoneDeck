@@ -48,6 +48,30 @@ final class ViewerController {
         onCanvasRatio?(ratio)
     }
 
+    /// Device frame and screen in web view coordinates (top-left origin), as last laid out.
+    @ObservationIgnored fileprivate var deviceFrame: CGRect?
+    @ObservationIgnored fileprivate var screenFrame: CGRect?
+    /// Called after the device was laid out again (the window shadow follows its shape).
+    @ObservationIgnored var onLayout: (() -> Void)?
+
+    fileprivate func geometryChanged(_ json: String) {
+        struct Geometry: Decodable { let frame: [Double]; let screen: [Double] }
+        guard let data = json.data(using: .utf8),
+              let g = try? JSONDecoder().decode(Geometry.self, from: data),
+              g.frame.count == 4, g.screen.count == 4 else { return }
+        func rect(_ a: [Double]) -> CGRect { CGRect(x: a[0], y: a[1], width: a[2], height: a[3]) }
+        deviceFrame = rect(g.frame)
+        screenFrame = rect(g.screen)
+        onLayout?()
+    }
+
+    /// True when a click at `point` (top-left origin) lands on the bezel: the device frame
+    /// outside the screen. The hardware buttons sit outside the frame and keep working.
+    fileprivate func isOnBezel(_ point: CGPoint) -> Bool {
+        guard deviceOnly, let deviceFrame, let screenFrame else { return false }
+        return deviceFrame.contains(point) && !screenFrame.contains(point)
+    }
+
     fileprivate func applyLayout() {
         webView?.evaluateJavaScript("window.__pmd3barLayout && window.__pmd3barLayout.setDeviceOnly(\(deviceOnly))")
     }
@@ -90,6 +114,22 @@ final class ViewerController {
     }
 }
 
+/// Web view that moves its window when the iPhone's bezel is dragged, like the Simulator: with
+/// only the iPhone showing, the bezel is most of what there is to grab.
+final class ViewerWKWebView: WKWebView {
+    weak var controller: ViewerController?
+
+    override func mouseDown(with event: NSEvent) {
+        var p = convert(event.locationInWindow, from: nil)
+        if !isFlipped { p.y = bounds.height - p.y }
+        if let window, controller?.isOnBezel(p) == true {
+            window.performDrag(with: event)
+            return
+        }
+        super.mouseDown(with: event)
+    }
+}
+
 /// WKWebView hosting the serve-web viewer: plays audio without a click, saves the viewer's
 /// downloads (screenshots, recordings) into ~/Downloads, and forwards console errors to our log.
 struct ViewerWebView: NSViewRepresentable {
@@ -110,7 +150,8 @@ struct ViewerWebView: NSViewRepresentable {
         ucc.addUserScript(WKUserScript(source: Self.layoutJS(deviceOnly: controller.deviceOnly),
                                        injectionTime: .atDocumentStart, forMainFrameOnly: true))
 
-        let web = WKWebView(frame: .zero, configuration: config)
+        let web = ViewerWKWebView(frame: .zero, configuration: config)
+        web.controller = controller
         web.navigationDelegate = context.coordinator
         web.uiDelegate = context.coordinator
         web.isInspectable = true  // Safari ▸ Develop menu, for debugging the viewer
@@ -148,6 +189,7 @@ struct ViewerWebView: NSViewRepresentable {
                 switch kind {
                 case "log": PMD3.log("[viewer] \(text)")
                 case "ratio": if let r = Double(text), r > 0 { controller.canvasRatioChanged(r) }
+                case "geometry": controller.geometryChanged(text)
                 case "recording-done": controller.recordingFinished(nil)
                 case "recording-error":
                     PMD3.log("[viewer] recording: \(text)")
@@ -219,11 +261,15 @@ struct ViewerWebView: NSViewRepresentable {
     /// Viewer layout, injected at document start:
     /// - always hides the pymobiledevice3 branding (logo + name) in the top bar;
     /// - "device only" mode (`html.pmd3-device-only`) hides the top bar, both side trays and the
-    ///   button row, leaving just the iPhone. The viewer's fitCanvasToViewport() keeps 150 px of
-    ///   height for the top bar and button row: in this mode it is shown a taller window for the
-    ///   duration of the call, so the screen uses that room. `make check` verifies what this relies on.
+    ///   button row, and makes the page transparent around the device (no background, glow or
+    ///   drop shadow), so the window can take the iPhone's shape. The viewer's
+    ///   fitCanvasToViewport() keeps 150 px of height and 88 px of width for its own chrome: in
+    ///   this mode it is shown a viewport that only keeps our margin, for the duration of the
+    ///   call, so the device fills the window. `make check` verifies what this relies on.
+    /// - reports the screen proportions (window sizing) and where the bezel is (window dragging).
     static func layoutJS(deviceOnly: Bool) -> String {
-        """
+        let m = Int(ViewerLayout.margin)
+        return """
         (() => {
           const style = document.createElement('style');
           style.textContent = `
@@ -231,14 +277,23 @@ struct ViewerWebView: NSViewRepresentable {
             html.pmd3-device-only #topbar,
             html.pmd3-device-only .tray,
             html.pmd3-device-only #bottom-row { display: none !important; }
-            html.pmd3-device-only #stage-wrap { padding-top: 12px; padding-bottom: 12px; }
+            html.pmd3-device-only, html.pmd3-device-only body { background: transparent !important; }
+            html.pmd3-device-only body { padding: 0; gap: 0; overflow: hidden; }
+            html.pmd3-device-only #workspace { gap: 0; align-items: center; }
+            html.pmd3-device-only #stage-wrap { padding: \(m)px; }
+            html.pmd3-device-only #stage::before { display: none; }
+            html.pmd3-device-only body.frame-on #device-frame { box-shadow: 0 0 0 2px #55585f, 0 0 0 3px #1b1c1f; }
           `;
           document.documentElement.appendChild(style);
 
           let deviceOnly = \(deviceOnly);
           document.documentElement.classList.toggle('pmd3-device-only', deviceOnly);
 
+          const VIEWER_RESERVED_W = \(Int(ViewerLayout.viewerReservedWidth)), OWN_RESERVED_W = \(Int(ViewerLayout.reservedWidth));
           const VIEWER_RESERVED_H = \(Int(ViewerLayout.viewerReservedHeight)), OWN_RESERVED_H = \(Int(ViewerLayout.ownReservedHeight));
+          const post = (kind, text) => {
+            try { window.webkit.messageHandlers.pmd3bar.postMessage({kind, text: String(text)}); } catch (_) {}
+          };
           // Tells the app the screen proportions, so the window can be sized around the iPhone.
           let lastRatio = 0;
           const reportRatio = () => {
@@ -247,22 +302,37 @@ struct ViewerWebView: NSViewRepresentable {
             const r = c.width / c.height;
             if (Math.abs(r - lastRatio) < 0.001) return;
             lastRatio = r;
-            try { window.webkit.messageHandlers.pmd3bar.postMessage({kind: 'ratio', text: String(r)}); } catch (_) {}
+            post('ratio', r);
+          };
+          // Tells the app where the device frame and the screen are, so dragging the bezel moves the window.
+          let lastGeometry = '';
+          const reportGeometry = () => {
+            const f = document.getElementById('device-frame'), c = document.getElementById('c');
+            if (!f || !c) return;
+            const box = r => [r.left, r.top, r.width, r.height].map(v => Math.round(v * 10) / 10);
+            const g = JSON.stringify({frame: box(f.getBoundingClientRect()), screen: box(c.getBoundingClientRect())});
+            if (g === lastGeometry) return;
+            lastGeometry = g;
+            post('geometry', g);
           };
           const install = () => {
             const orig = window.fitCanvasToViewport;
             if (typeof orig !== 'function' || orig.__pmd3bar) return;
             const fit = function () {
-              try { return fitInner(); } finally { reportRatio(); }
+              try { return fitInner(); } finally { reportRatio(); requestAnimationFrame(reportGeometry); }
             };
             const fitInner = function () {
               if (!deviceOnly) return orig();
-              const own = Object.getOwnPropertyDescriptor(window, 'innerHeight');
-              const h = window.innerHeight;
+              const own = {h: Object.getOwnPropertyDescriptor(window, 'innerHeight'),
+                           w: Object.getOwnPropertyDescriptor(window, 'innerWidth')};
+              const h = window.innerHeight, w = window.innerWidth;
               Object.defineProperty(window, 'innerHeight',
                                     {get: () => h + VIEWER_RESERVED_H - OWN_RESERVED_H, configurable: true});
+              Object.defineProperty(window, 'innerWidth',
+                                    {get: () => w + VIEWER_RESERVED_W - OWN_RESERVED_W, configurable: true});
               try { orig(); } finally {
-                if (own) Object.defineProperty(window, 'innerHeight', own); else delete window.innerHeight;
+                if (own.h) Object.defineProperty(window, 'innerHeight', own.h); else delete window.innerHeight;
+                if (own.w) Object.defineProperty(window, 'innerWidth', own.w); else delete window.innerWidth;
               }
             };
             fit.__pmd3bar = true;

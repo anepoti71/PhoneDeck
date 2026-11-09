@@ -81,10 +81,10 @@ suite("Versions.isVersion(_:newerThan:)") {
 suite("ViewerLayout.viewportWidth") {
     // iPhone portrait screen 1179 x 2556 in a viewport 824 px high.
     let w = ViewerLayout.viewportWidth(forHeight: 824, ratio: 1179.0 / 2556.0)
-    check(abs(w - (88 + 800 * 1179.0 / 2556.0)) < 0.001, "portrait")
+    check(abs(w - (28 + (824 - 28) * 1179.0 / 2556.0)) < 0.001, "portrait: device fills the height, margin on both sides")
     let landscape = ViewerLayout.viewportWidth(forHeight: 500, ratio: 2556.0 / 1179.0)
     check(landscape > 500, "landscape is wider than tall")
-    check(ViewerLayout.viewportWidth(forHeight: 10, ratio: 0.5) == 88 + 100 * 0.5, "tiny heights clamp to 100")
+    check(ViewerLayout.viewportWidth(forHeight: 10, ratio: 0.5) == 28 + 100 * 0.5, "tiny heights clamp to 100")
 }
 
 suite("DeviceDates.parse") {

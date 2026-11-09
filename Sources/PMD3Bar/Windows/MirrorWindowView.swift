@@ -27,7 +27,8 @@ struct MirrorWindowView: View {
             if let banner = tools.banner { BannerView(banner: banner) { tools.banner = nil } }
         }
         .frame(minWidth: 300, minHeight: 420)
-        .background(Color.black)
+        .background(bare ? Color.clear : Color.black)
+        .toolbarBackground(bare ? .hidden : .automatic, for: .windowToolbar)
         .overlay {
             if dropTargeted {
                 RoundedRectangle(cornerRadius: 12).strokeBorder(Color.accentColor, lineWidth: 4)
@@ -50,15 +51,24 @@ struct MirrorWindowView: View {
         }
         .toolbar { toolbar }
         .navigationTitle(device?.name ?? "iPhone")
-        .navigationSubtitle(subtitle)
+        .navigationSubtitle(bare ? "" : subtitle)
+        .modifier(HideTitle(hidden: bare))
         .onAppear {
             viewer.deviceName = device?.name ?? "iPhone"
             if !mirroringSupported { showTools = true }
             viewer.onCanvasRatio = { [udid] r in MirrorWindows.shared.updateFit(udid, ratio: r) }
+            viewer.onLayout = { [udid] in MirrorWindows.shared.deviceLaidOut(udid) }
             MirrorWindows.shared.updateFit(udid, deviceOnly: viewer.deviceOnly, tools: showTools)
+            MirrorWindows.shared.setBare(udid, bare)
         }
         .onChange(of: showTools) { _, on in MirrorWindows.shared.updateFit(udid, tools: on) }
         .onChange(of: viewer.deviceOnly) { _, on in MirrorWindows.shared.updateFit(udid, deviceOnly: on) }
+        .onChange(of: bare) { _, on in MirrorWindows.shared.setBare(udid, on) }
+    }
+
+    /// Only the mirrored iPhone showing: the window is transparent around it, like the Simulator.
+    private var bare: Bool {
+        viewer.deviceOnly && !showTools && mirroringSupported && session.state == .running
     }
 
     private var subtitle: String {
@@ -171,6 +181,20 @@ struct MirrorWindowView: View {
         Task {
             for ipa in ipas { await tools.install(ipa) }
             if !others.isEmpty { await tools.upload(others) }
+        }
+    }
+}
+
+/// Hides the window title from the toolbar (floating over the desktop it is unreadable, and it
+/// takes the room the buttons need). The title stays the window's name (Window menu, Mission Control).
+private struct HideTitle: ViewModifier {
+    let hidden: Bool
+
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *), hidden {
+            content.toolbar(removing: .title)
+        } else {
+            content
         }
     }
 }

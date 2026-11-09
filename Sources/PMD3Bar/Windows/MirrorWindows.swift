@@ -19,6 +19,29 @@ final class MirrorWindows: NSObject, NSWindowDelegate {
         var active: Bool { deviceOnly && !tools && ratio != nil }
     }
     private var fits: [String: Fit] = [:]
+    /// Windows showing only the mirrored iPhone: transparent around the device, like the Simulator.
+    private var bare: Set<String> = []
+
+    /// Makes the window transparent around the iPhone (only the iPhone showing, mirroring running),
+    /// or back to a regular black window (controls, tools, placeholders).
+    func setBare(_ udid: String, _ on: Bool) {
+        if on { bare.insert(udid) } else { bare.remove(udid) }
+        if let w = windows[udid] { applyBare(w, on) }
+    }
+
+    private func applyBare(_ w: NSWindow, _ on: Bool) {
+        w.isOpaque = !on
+        w.backgroundColor = on ? .clear : .black
+        w.titlebarAppearsTransparent = on
+        w.titleVisibility = on ? .hidden : .visible
+        w.invalidateShadow()
+    }
+
+    /// The window shadow follows the device's shape: recompute it once the device is redrawn.
+    func deviceLaidOut(_ udid: String) {
+        guard bare.contains(udid), let w = windows[udid] else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { w.invalidateShadow() }
+    }
     /// Width the tools panel takes (inspectorColumnWidth ideal).
     static let toolsWidth: CGFloat = 340
     private static let minWidth: CGFloat = 300
@@ -100,6 +123,7 @@ final class MirrorWindows: NSObject, NSWindowDelegate {
         if !w.setFrameUsingName("PMD3Bar.mirror.\(udid)") { w.center() }
         w.identifier = NSUserInterfaceItemIdentifier(udid)
         windows[udid] = w
+        applyBare(w, bare.contains(udid))
         // Windows open: behave like a regular app (Dock, Cmd-Tab); back to menu-bar only when all close.
         NSApp.setActivationPolicy(.regular)
         activate(w)
@@ -167,6 +191,7 @@ final class MirrorWindows: NSObject, NSWindowDelegate {
         gridStarted.remove(udid)
         windows[udid] = nil
         fits[udid] = nil
+        bare.remove(udid)
         // The grid may still be showing this iPhone: keep its stream then.
         model?.closeWindow(udid, keepMirroring: gridWindow != nil)
         if windows.isEmpty && gridWindow == nil { NSApp.setActivationPolicy(.accessory) }
