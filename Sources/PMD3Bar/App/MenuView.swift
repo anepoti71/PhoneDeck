@@ -116,12 +116,7 @@ struct MenuView: View {
         DisclosureGroup("Settings", isExpanded: $settingsExpanded) {
             VStack(alignment: .leading, spacing: 6) {
                 Toggle("Mount the Developer Disk Image as soon as an iPhone connects", isOn: $model.autoMountDDI)
-                HStack {
-                    Toggle("Notifications (connection, mount, installs, errors)", isOn: $model.notificationsEnabled)
-                    Button("Test") { model.testNotification() }
-                        .controlSize(.small)
-                        .disabled(!model.notificationsEnabled)
-                }
+                Toggle("Notifications", isOn: $model.notificationsEnabled)
                 Toggle("Shortcut ⌥⌘M: show/hide the selected iPhone's window", isOn: $model.hotKeyEnabled)
                 if LoginItem.available {
                     Toggle("Launch at login", isOn: Binding(

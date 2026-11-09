@@ -82,10 +82,10 @@ struct ToolsPanel: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .controlSize(.small)
-                .padding(.horizontal, 10).padding(.top, 6)
+                .padding(.horizontal, 10).padding(.vertical, 8)
+            } else {
+                Text(tab.rawValue).font(.headline).padding(.vertical, 6)
             }
-            Text(tab.isDeveloper ? "Developer · \(tab.rawValue)" : tab.rawValue)
-                .font(.headline).padding(.vertical, 6)
             Divider()
             switch tab {
             case .apps: AppsTab(tools: tools)
