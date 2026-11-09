@@ -75,7 +75,10 @@ build/python/bin/python3 -I Resources/pmd3bar_helper.py list
    la causa (di solito la modalità sviluppatore spenta).
 3. Premi ▶ accanto all'iPhone (o ⌥⌘M per l'iPhone selezionato): si apre la sua finestra e parte
    il mirroring. Per iPhone con iOS precedente al 27 il pulsante è 🔧 e apre solo gli Strumenti.
-4. Nella barra della finestra:
+4. La finestra mostra **solo l'iPhone**. Nella barra della finestra:
+   - 🎚 **Mostra controlli**: zoom, rotazione, cornice, Home/Siri/Swipe, appunti, accessibilità
+     del viewer. Lo stesso pulsante ("Solo iPhone") li nasconde di nuovo. La scelta vale anche
+     per le finestre aperte dopo;
    - ⏺ registra lo schermo in `~/Download`;
    - 🧭 apre lo stesso viewer nel browser;
    - ■ ferma il mirroring;
@@ -238,6 +241,7 @@ Se cambi la versione minore di Python (per esempio da 3.12 a 3.13), aggiorna anc
 | `ModuleNotFoundError: No module named 'importlib'` nel log | L'app è stata ricreata mentre era aperta | Già gestito: `make run` e `make install` chiudono prima l'app. Riavviala |
 | Pip non riesce ad aggiornare (Permission denied) | File creati da root, dopo aver usato `sudo` con pymobiledevice3 | `sudo rm -rf` della cartella indicata nell'errore; poi non usare più `sudo` |
 | "Python con pymobiledevice3 non trovato" | Manca `build/python` (in `make dev`, manca il conda env) | `make python`, oppure imposta `PMD3_PYTHON=/percorso/python` |
+| In modalità solo iPhone ricompaiono barra o pannelli, oppure lo schermo è piccolo | Una nuova versione del viewer ha cambiato id o calcolo delle dimensioni | `make check-static` lo segnala; aggiorna `layoutJS` in `WebView.swift` |
 | Registrazione che non parte | Il viewer è cambiato (canvas `c`), oppure lo stream non è ancora attivo | Aspetta il video; vedi il punto 4 della [verifica](#43-verificare-dopo-laggiornamento) |
 | "Screen streaming needs iOS 27.0 or later" | iPhone con iOS precedente al 27 | Normale: per quell'iPhone usa gli Strumenti (pulsante 🔧) |
 | Nessuna notifica | Permesso negato, oppure app avviata con `make dev` | Impostazioni di Sistema ▸ Notifiche ▸ PMD3Bar; usa l'app compilata |

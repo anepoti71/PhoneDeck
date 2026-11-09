@@ -12,7 +12,19 @@ final class ViewerController {
     var lastError: String?
     /// Name used for screenshots/recordings saved from this viewer.
     var deviceName = "iPhone"
+    /// Only the iPhone, without the viewer's top bar, side trays and button row. The default;
+    /// the choice is remembered for the next windows.
+    var deviceOnly: Bool = UserDefaults.standard.object(forKey: "deviceOnly") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(deviceOnly, forKey: "deviceOnly")
+            applyLayout()
+        }
+    }
     fileprivate weak var webView: WKWebView?
+
+    fileprivate func applyLayout() {
+        webView?.evaluateJavaScript("window.__pmd3barLayout && window.__pmd3barLayout.setDeviceOnly(\(deviceOnly))")
+    }
 
     func startRecording() {
         webView?.evaluateJavaScript("window.__pmd3bar.startRecording()") { [weak self] result, error in
@@ -69,7 +81,8 @@ struct ViewerWebView: NSViewRepresentable {
         let ucc = config.userContentController
         ucc.add(context.coordinator, name: "pmd3bar")
         ucc.addUserScript(WKUserScript(source: Self.bridgeJS, injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        ucc.addUserScript(WKUserScript(source: Self.styleJS, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        ucc.addUserScript(WKUserScript(source: Self.layoutJS(deviceOnly: controller.deviceOnly),
+                                       injectionTime: .atDocumentStart, forMainFrameOnly: true))
 
         let web = WKWebView(frame: .zero, configuration: config)
         web.navigationDelegate = context.coordinator
@@ -166,20 +179,69 @@ struct ViewerWebView: NSViewRepresentable {
             PMD3.log("Download fallito: \(error.localizedDescription)")
         }
 
+        // A reload (serve-web restarted) gets the mode from when the view was made: re-apply the current one.
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            MainActor.assumeIsolated { controller.applyLayout() }
+        }
+
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
             PMD3.log("[viewer] caricamento fallito: \(error.localizedDescription)")
         }
     }
 
-    /// Hides the viewer's pymobiledevice3 branding (logo + name) in the top bar; the window title
-    /// already names the iPhone. The keyboard and FPS chips stay. `make check` verifies these ids.
-    static let styleJS = #"""
-    (() => {
-      const style = document.createElement('style');
-      style.textContent = '#brand-logo, #brand { display: none !important; }';
-      document.documentElement.appendChild(style);
-    })();
-    """#
+    /// Viewer layout, injected at document start:
+    /// - always hides the pymobiledevice3 branding (logo + name) in the top bar;
+    /// - "device only" mode (`html.pmd3-device-only`) hides the top bar, both side trays and the
+    ///   button row, leaving just the iPhone. The viewer's fitCanvasToViewport() keeps 150 px of
+    ///   height for the top bar and button row: in this mode it is shown a taller window for the
+    ///   duration of the call, so the screen uses that room. `make check` verifies what this relies on.
+    static func layoutJS(deviceOnly: Bool) -> String {
+        """
+        (() => {
+          const style = document.createElement('style');
+          style.textContent = `
+            #brand-logo, #brand { display: none !important; }
+            html.pmd3-device-only #topbar,
+            html.pmd3-device-only .tray,
+            html.pmd3-device-only #bottom-row { display: none !important; }
+            html.pmd3-device-only #stage-wrap { padding-top: 12px; padding-bottom: 12px; }
+          `;
+          document.documentElement.appendChild(style);
+
+          let deviceOnly = \(deviceOnly);
+          document.documentElement.classList.toggle('pmd3-device-only', deviceOnly);
+
+          const VIEWER_RESERVED_H = 150, OWN_RESERVED_H = 24;
+          const install = () => {
+            const orig = window.fitCanvasToViewport;
+            if (typeof orig !== 'function' || orig.__pmd3bar) return;
+            const fit = function () {
+              if (!deviceOnly) return orig();
+              const own = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+              const h = window.innerHeight;
+              Object.defineProperty(window, 'innerHeight',
+                                    {get: () => h + VIEWER_RESERVED_H - OWN_RESERVED_H, configurable: true});
+              try { orig(); } finally {
+                if (own) Object.defineProperty(window, 'innerHeight', own); else delete window.innerHeight;
+              }
+            };
+            fit.__pmd3bar = true;
+            window.fitCanvasToViewport = fit;   // the viewer's own calls go through the global name
+            window.addEventListener('resize', fit);  // runs after the viewer's original listener
+            fit();
+          };
+          window.addEventListener('DOMContentLoaded', install);
+          window.__pmd3barLayout = {
+            setDeviceOnly(on) {
+              deviceOnly = on;
+              document.documentElement.classList.toggle('pmd3-device-only', on);
+              install();
+              if (typeof window.fitCanvasToViewport === 'function') window.fitCanvasToViewport();
+            },
+          };
+        })();
+        """
+    }
 
     /// Injected into the viewer: forwards console warnings/errors and records the screen canvas.
     /// The recording is video only (the viewer plays audio through its own private AudioContext).

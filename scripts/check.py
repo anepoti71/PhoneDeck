@@ -128,6 +128,14 @@ def static_checks() -> None:
         record('<canvas id="c"' in html, "viewer.html ha il canvas id=\"c\" (registrazione)",
                "canvas non trovato: va aggiornato bridgeJS in WebView.swift")
         record((viewer / "viewer.js").is_file(), "viewer.js presente")
+        layout_ids = ["topbar", "left-tray", "right-tray", "bottom-row"]
+        missing = [i for i in layout_ids if f'id="{i}"' not in html]
+        record(not missing, "viewer.html ha topbar, trays e bottom-row (modalità solo iPhone)",
+               f"id mancanti: {', '.join(missing)}: aggiorna layoutJS in WebView.swift")
+        js = (viewer / "viewer.js").read_text()
+        record("function fitCanvasToViewport" in js and "innerHeight - 150" in js,
+               "viewer.js: fitCanvasToViewport riserva 150 px in altezza (modalità solo iPhone)",
+               "cambiato: aggiorna VIEWER_RESERVED_H in layoutJS (WebView.swift)")
         record('id="brand-logo"' in html and 'id="brand"' in html,
                "viewer.html ha #brand-logo e #brand (nascosti dall'app)",
                "id cambiati: il logo di pymobiledevice3 ricomparirebbe, aggiorna styleJS in WebView.swift")

@@ -215,6 +215,14 @@ struct MirrorWindowView: View {
                 Button { session.start() } label: { Label("Avvia", systemImage: "play.fill") }
                     .disabled(device?.reachable != true)
             }
+            Button { viewer.deviceOnly.toggle() } label: {
+                Label(viewer.deviceOnly ? "Mostra controlli" : "Solo iPhone",
+                      systemImage: viewer.deviceOnly ? "slider.horizontal.3" : "iphone")
+            }
+            .help(viewer.deviceOnly
+                  ? "Mostra i controlli del viewer: zoom, rotazione, tasti, appunti, accessibilità"
+                  : "Mostra solo l'iPhone")
+            .disabled(!mirroringSupported)
             Button { showTools.toggle() } label: { Label("Strumenti", systemImage: "sidebar.right") }
                 .help("App, file, posizione e log")
         }

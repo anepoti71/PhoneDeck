@@ -23,6 +23,8 @@ Per installare, aggiornare e risolvere problemi vedi il **[RUNBOOK](RUNBOOK.md)*
 **In ogni finestra**
 - Schermo dell'iPhone in tempo reale, con audio, tocchi, tastiera, tasti fisici e appunti condivisi.
   È il viewer web di pymobiledevice3, mostrato in una finestra nativa.
+- Di base si vede **solo l'iPhone**. I controlli del viewer (zoom, rotazione, cornice, tasti, appunti,
+  accessibilità) e gli Strumenti si aprono solo se li chiedi, dai pulsanti nella barra della finestra.
 - Registrazione video dello schermo e screenshot, salvati in `~/Download`.
 - Pannello **Strumenti** (icona a destra nella barra della finestra):
   - **App**: elenco delle app installate con icone, installazione di `.ipa`, avvio, disinstallazione.
