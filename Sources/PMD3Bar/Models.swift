@@ -9,6 +9,9 @@ struct Device: Identifiable, Hashable {
     var unreachableError: String? // set when usbmuxd lists the device but no connection answers
 
     var reachable: Bool { !connections.isEmpty }
+    /// serve-web: "Screen streaming needs iOS 27.0 or later". Tools (apps, files, log, location) work on older iOS.
+    static let mirrorMinimumIOS = 27
+    var supportsMirroring: Bool { (Int(productVersion.split(separator: ".").first ?? "") ?? 0) >= Self.mirrorMinimumIOS }
     var hasUSB: Bool { connections.contains("USB") }
 
     var connectionLabel: String {

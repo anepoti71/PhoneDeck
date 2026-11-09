@@ -20,6 +20,13 @@ final class MirrorSession: Identifiable {
 
     /// Asked before an automatic restart: is the device still there?
     var isDeviceReachable: () -> Bool = { true }
+    /// Called when the session ends in an error (for notifications).
+    var onFailure: (String) -> Void = { _ in }
+
+    private func fail(_ message: String) {
+        state = .failed(message)
+        onFailure(message)
+    }
 
     private var process: Process?
     private var restartPending = false
@@ -72,7 +79,7 @@ final class MirrorSession: Identifiable {
             try? await Task.sleep(for: .seconds(1))
         }
         if process === p, state == .starting {
-            state = .failed("Il viewer non risponde: vedi il log")
+            fail("Il viewer non risponde: vedi il log")
             p.interrupt()
         }
     }
@@ -98,7 +105,7 @@ final class MirrorSession: Identifiable {
                 try? await Task.sleep(for: .seconds(2))
                 if process == nil, state == .starting { state = .stopped; start(userInitiated: false) }
             }
-        default: state = .failed("Mirroring terminato (exit \(status)): vedi il log")
+        default: fail("Mirroring terminato (exit \(status)): vedi il log")
         }
     }
 

@@ -10,15 +10,20 @@ Per installare, aggiornare e risolvere problemi vedi il **[RUNBOOK](RUNBOOK.md)*
 
 **Dalla barra dei menu**
 - Elenca gli iPhone collegati via USB o Wi-Fi, con versione di iOS e stato della connessione.
-- Mostra se la Developer Disk Image (DDI) è montata e la monta con un clic.
+- Mostra se la Developer Disk Image (DDI) è montata e la monta **da sola** quando colleghi un iPhone.
 - Avvia il mirroring di ogni iPhone nella sua finestra. Si possono mirrorare più iPhone insieme.
+  Gli iPhone con iOS precedente al 27 aprono la finestra con i soli Strumenti.
+- **Notifiche** quando un iPhone si collega o si scollega, la DDI viene montata, un'installazione
+  finisce o il mirroring si interrompe.
+- **Scorciatoia globale ⌥⌘M** per mostrare o nascondere la finestra dell'iPhone selezionato.
+- **Avvio al login**, attivabile dal menu (Impostazioni).
 
 **In ogni finestra**
 - Schermo dell'iPhone in tempo reale, con audio, tocchi, tastiera, tasti fisici e appunti condivisi.
   È il viewer web di pymobiledevice3, mostrato in una finestra nativa.
 - Registrazione video dello schermo e screenshot, salvati in `~/Download`.
 - Pannello **Strumenti** (icona a destra nella barra della finestra):
-  - **App**: elenco delle app installate, installazione di `.ipa`, avvio, disinstallazione.
+  - **App**: elenco delle app installate con icone, installazione di `.ipa`, avvio, disinstallazione.
   - **File**: cartella Media dell'iPhone (foto in `DCIM`), con download, caricamento ed eliminazione.
   - **Posizione**: posizione GPS simulata, scelta sulla mappa. Quando chiudi la finestra torna quella reale.
   - **Log**: log di sistema in tempo reale, con filtri ed esportazione.
@@ -29,7 +34,7 @@ Per installare, aggiornare e risolvere problemi vedi il **[RUNBOOK](RUNBOOK.md)*
 - Mac con Apple Silicon e macOS 14 o successivo.
 - Swift 6: bastano i Command Line Tools (`xcode-select --install`), non serve Xcode.
 - iPhone con iOS 17 o successivo, già abbinato al Mac almeno una volta via cavo.
-  Per il mirroring serve iOS 27 o successivo.
+  Per il mirroring serve iOS 27 o successivo; App, File, Posizione e Log funzionano anche prima.
 - Modalità sviluppatore attiva sull'iPhone (Impostazioni ▸ Privacy e sicurezza ▸ Modalità sviluppatore).
 
 ## Avvio rapido
@@ -77,7 +82,8 @@ PMD3Bar.app/Contents/
     fallisce del tutto);
   - elenca le cartelle con tipo e dimensione dei file;
   - elenca le app solo con nome, bundle ID e versione, senza i metadati completi, che possono
-    contenere chiavi delle app.
+    contenere chiavi delle app;
+  - scarica le icone delle app con una sola connessione e le salva in `~/Library/Caches/PMD3Bar/icons`.
 - **Quale Python**, in ordine di priorità:
   1. quello incluso nell'app;
   2. la variabile d'ambiente `PMD3_PYTHON`;
@@ -95,15 +101,18 @@ PMD3Bar.app/Contents/
 | `Sources/PMD3Bar/DeviceTools.swift` | App, file, posizione e log di sistema di un iPhone |
 | `Sources/PMD3Bar/PMD3.swift` | Ricerca del Python, esecuzione dei comandi, log |
 | `Sources/PMD3Bar/Models.swift` | Lettura del JSON, stati |
+| `Sources/PMD3Bar/Integrations.swift` | Notifiche, scorciatoia globale ⌥⌘M, avvio al login |
 | `Resources/pmd3bar_helper.py` | Funzioni Python aggiuntive (vedi sopra) |
 | `Resources/Info.plist` | Metadati del bundle (app della barra dei menu, `LSUIElement`) |
 | `scripts/fetch-python.sh` | Scarica CPython (sha256 verificato) e installa pymobiledevice3 |
 | `scripts/build-app.sh` | Compila, crea `build/PMD3Bar.app` e la firma ad-hoc |
-| `Makefile` | Comandi `dev`, `python`, `app`, `run`, `install`, `clean` |
+| `scripts/check.py` | Verifica che pymobiledevice3 offra tutto quello che l'app usa (`make check`) |
+| `Makefile` | Comandi `dev`, `python`, `app`, `run`, `install`, `check`, `check-static`, `clean` |
 
 ## Limiti noti
 
-- Si mirrora un iPhone per finestra. La registrazione è solo video: l'audio resta dentro il viewer.
+- Si mirrora un iPhone per finestra, solo con iOS 27 o successivo. La registrazione è solo video:
+  l'audio resta dentro il viewer.
 - Via Wi-Fi l'iPhone deve essere sbloccato o sveglio e sulla stessa rete. Il primo abbinamento richiede il cavo.
 - Posizione simulata e avvio delle app richiedono la DDI montata.
 - La firma è ad-hoc: l'app va bene su questo Mac. Per darla ad altri servono firma Developer ID e notarizzazione.

@@ -18,6 +18,9 @@ final class DeviceTools {
         var busy: Bool = false
     }
 
+    /// Posts a system notification (set by AppModel, follows the Notifiche setting).
+    var notify: (String, String) -> Void = { _, _ in }
+
     init(udid: String) {
         self.udid = udid
     }
@@ -47,9 +50,40 @@ final class DeviceTools {
         if r.ok, let list = try? JSONDecoder().decode([AppInfo].self, from: r.stdout) {
             apps = list
             appsError = nil
+            await loadIcons()
         } else {
             appsError = r.errorSummary
         }
+    }
+
+    /// App icons, cached on disk by bundle id (shared by all iPhones).
+    static let iconsDir: URL = {
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("PMD3Bar/icons", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
+    /// Bumped when new icons land on disk, so the list redraws.
+    var iconsGeneration = 0
+    @ObservationIgnored private let iconCache = NSCache<NSString, NSImage>()
+
+    func icon(for bundleID: String) -> NSImage? {
+        _ = iconsGeneration
+        if let img = iconCache.object(forKey: bundleID as NSString) { return img }
+        let url = Self.iconsDir.appendingPathComponent("\(bundleID).png")
+        guard let img = NSImage(contentsOf: url) else { return nil }
+        iconCache.setObject(img, forKey: bundleID as NSString)
+        return img
+    }
+
+    private func loadIcons() async {
+        let missing = apps.map(\.bundle_id).filter {
+            !FileManager.default.fileExists(atPath: Self.iconsDir.appendingPathComponent("\($0).png").path)
+        }
+        guard !missing.isEmpty else { return }
+        let r = await PMD3.runHelper(["icons", Self.iconsDir.path] + missing, udid: udid, timeout: 120)
+        if r.ok { iconsGeneration += 1 }
     }
 
     func install(_ url: URL) async {
@@ -57,9 +91,11 @@ final class DeviceTools {
         let r = await PMD3.run(["apps", "install", url.path], udid: udid, timeout: 900)
         if r.ok {
             report("\(url.lastPathComponent) installata")
+            notify("App installata", url.lastPathComponent)
             await refreshApps()
         } else {
             report("Installazione fallita: \(r.errorSummary)", error: true)
+            notify("Installazione fallita", "\(url.lastPathComponent): \(r.errorSummary)")
         }
     }
 
@@ -185,8 +221,9 @@ final class DeviceTools {
         let args = ["developer", "dvt", "simulate-location", "set", "--",
                     String(format: "%.6f", c.latitude), String(format: "%.6f", c.longitude)]
         guard let p = try? PMD3.makeProcess(args, udid: udid) else { return }
+        // The "Press Ctrl+C" hint goes to stdout, errors to stderr: read both from one pipe.
         let err = Pipe()
-        p.standardOutput = FileHandle.nullDevice
+        p.standardOutput = err
         p.standardError = err
         final class Box: @unchecked Sendable { var data = Data() }
         let box = Box()
@@ -307,6 +344,9 @@ final class DeviceTools {
             if reader.pending.count > 5000 { reader.pending.removeFirst(reader.pending.count - 5000) }
             reader.lock.unlock()
         }
+        // Timer isn't Sendable: hand it to the termination handler through a box.
+        final class TimerBox: @unchecked Sendable { var timer: Timer? }
+        let timerBox = TimerBox()
         let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
             reader.lock.lock()
             let batch = reader.pending
@@ -324,10 +364,11 @@ final class DeviceTools {
             }
         }
         RunLoop.main.add(timer, forMode: .common)
+        timerBox.timer = timer
         p.terminationHandler = { [weak self] proc in
             out.fileHandleForReading.readabilityHandler = nil
             Task { @MainActor in
-                timer.invalidate()
+                timerBox.timer?.invalidate()
                 guard let self, self.logProcess === proc else { return }
                 self.logProcess = nil
                 self.logRunning = false

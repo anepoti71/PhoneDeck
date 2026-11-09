@@ -52,6 +52,7 @@ e poi solo per aggiornare pymobiledevice3.
 | `open ~/Applications/PMD3Bar.app` | Avvia l'app installata |
 | `make run` | Ricrea `build/PMD3Bar.app` e la avvia (chiude prima quella aperta) |
 | `make dev` | Esegue dai sorgenti con `swift run`, usando il Python del conda env |
+| `make check` | Verifica pymobiledevice3 incluso (vedi [4.3](#43-verificare-dopo-laggiornamento)) |
 | `open build/PMD3Bar.app --args --open <UDID>` | Avvia e apre subito la finestra di quell'iPhone |
 
 Per trovare l'UDID degli iPhone:
@@ -59,7 +60,8 @@ Per trovare l'UDID degli iPhone:
 build/python/bin/python3 -I Resources/pmd3bar_helper.py list
 ```
 
-**Avvio automatico al login**: Impostazioni di Sistema ▸ Generali ▸ Elementi login ▸ `+` ▸ `~/Applications/PMD3Bar.app`.
+**Avvio automatico al login**: menu ▸ Impostazioni ▸ "Avvia al login". Attivalo dalla copia in
+`~/Applications`: macOS registra il percorso dell'app da cui lo attivi.
 
 **Chiudere**: menu ▸ **Esci**. Si fermano anche tutti i mirroring, e i processi di posizione e log.
 
@@ -67,9 +69,11 @@ build/python/bin/python3 -I Resources/pmd3bar_helper.py list
 
 1. Clicca l'icona dell'iPhone nella barra dei menu.
 2. Seleziona un iPhone: la sezione **Developer Disk Image** si riferisce all'iPhone selezionato.
-   Se è "Non montata" premi **Monta**. Ci vogliono pochi secondi via cavo, di più via Wi-Fi.
-   Va rifatto dopo ogni riavvio dell'iPhone.
-3. Premi ▶ accanto all'iPhone: si apre la sua finestra e parte il mirroring.
+   Con "Monta la Developer Disk Image appena colleghi un iPhone" attivo (predefinito), l'app la
+   monta da sola, una volta per ogni collegamento. Se fallisce, premi **Monta** dopo aver risolto
+   la causa (di solito la modalità sviluppatore spenta).
+3. Premi ▶ accanto all'iPhone (o ⌥⌘M per l'iPhone selezionato): si apre la sua finestra e parte
+   il mirroring. Per iPhone con iOS precedente al 27 il pulsante è 🔧 e apre solo gli Strumenti.
 4. Nella barra della finestra:
    - ⏺ registra lo schermo in `~/Download`;
    - 🧭 apre lo stesso viewer nel browser;
@@ -79,6 +83,16 @@ build/python/bin/python3 -I Resources/pmd3bar_helper.py list
 
 Porte: il primo iPhone usa la "Porta iniziale" impostata nel menu (8080 se non la cambi), gli altri
 le successive libere.
+
+**Impostazioni** (menu ▸ Impostazioni):
+
+| Opzione | Predefinito | Note |
+|---|---|---|
+| Monta la DDI appena colleghi un iPhone | sì | Un tentativo per collegamento; riprova dopo uno scollegamento di oltre 20 s |
+| Notifiche | sì | La prima volta macOS chiede il permesso. Collegamenti e scollegamenti sono notificati solo dopo 20 s, per non avvisare a ogni standby via Wi-Fi |
+| Scorciatoia ⌥⌘M | sì | Se un'altra app la usa già, l'app lo segnala sotto le opzioni |
+| Avvia al login | no | Solo dall'app compilata (`.app`), non con `make dev` |
+| Porta iniziale | 8080 | |
 
 ## Aggiornare pymobiledevice3
 
@@ -111,8 +125,24 @@ Per rendere permanente la nuova versione, aggiorna `PMD3_VERSION` in `scripts/fe
 
 ### 4.3 Verificare dopo l'aggiornamento
 
-Una verifica automatica non c'è ancora: fai questi controlli a mano, con un iPhone collegato.
-Ogni riga corrisponde a un punto in cui l'app dipende da pymobiledevice3.
+```bash
+make check                          # controlli statici + iPhone collegato
+make check-static                   # solo controlli statici, senza iPhone
+make check CHECK_ARGS="--location"  # anche la posizione simulata (imposta Roma e ripristina)
+make check CHECK_ARGS="--udid <UDID>"   # su un iPhone preciso
+```
+
+`scripts/check.py` verifica:
+- **senza iPhone**: comandi e opzioni usati dall'app, funzioni Python usate da `pmd3bar_helper.py`,
+  il canvas del viewer, il testo "Ctrl+C" atteso dalla posizione simulata;
+- **con iPhone**: elenco dispositivi, stato DDI, file, app, log di sistema, viewer `serve-web`
+  (solo iOS 27 e successivi; sugli altri viene saltato).
+
+Esce con codice 0 se tutto passa e, per ogni controllo fallito, indica cosa sistemare. Sceglie da
+solo un iPhone raggiungibile, preferendo quelli con iOS 27 o successivo e quelli via USB.
+
+Se un controllo fallisce, questa tabella dice dove guardare. Le stesse prove si possono fare a
+mano dall'app:
 
 | # | Prova | Se fallisce, guarda… |
 |---|---|---|
@@ -208,6 +238,10 @@ Se cambi la versione minore di Python (per esempio da 3.12 a 3.13), aggiorna anc
 | Pip non riesce ad aggiornare (Permission denied) | File creati da root, dopo aver usato `sudo` con pymobiledevice3 | `sudo rm -rf` della cartella indicata nell'errore; poi non usare più `sudo` |
 | "Python con pymobiledevice3 non trovato" | Manca `build/python` (in `make dev`, manca il conda env) | `make python`, oppure imposta `PMD3_PYTHON=/percorso/python` |
 | Registrazione che non parte | Il viewer è cambiato (canvas `c`), oppure lo stream non è ancora attivo | Aspetta il video; vedi il punto 4 della [verifica](#43-verificare-dopo-laggiornamento) |
+| "Screen streaming needs iOS 27.0 or later" | iPhone con iOS precedente al 27 | Normale: per quell'iPhone usa gli Strumenti (pulsante 🔧) |
+| Nessuna notifica | Permesso negato, oppure app avviata con `make dev` | Impostazioni di Sistema ▸ Notifiche ▸ PMD3Bar; usa l'app compilata |
+| ⌥⌘M non fa niente | Scorciatoia già usata da un'altra app, oppure disattivata | Menu ▸ Impostazioni: c'è un messaggio rosso se la registrazione è fallita |
+| Icone delle app mancanti | Cache vuota o iPhone non raggiungibile durante il caricamento | Pulsante ↻ nel pannello App; cache in `~/Library/Caches/PMD3Bar/icons` (si può cancellare) |
 
 ## 9. Regole da rispettare
 

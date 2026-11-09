@@ -1,4 +1,4 @@
-.PHONY: dev python app run install clean
+.PHONY: dev python app run install clean check check-static
 
 # Run from source, using $PMD3_PYTHON or ~/miniforge3/envs/pymobiledevice as the Python.
 dev:
@@ -14,6 +14,14 @@ app:
 
 run: app
 	open build/PMD3Bar.app
+
+# Verify the embedded pymobiledevice3 still provides what PMD3Bar uses (see RUNBOOK).
+# With an iPhone connected it also tests it; CHECK_ARGS="--location" tests the simulated location too.
+check:
+	build/python/bin/python3 -I scripts/check.py $(CHECK_ARGS)
+
+check-static:
+	build/python/bin/python3 -I scripts/check.py --no-device
 
 # Copy the app to ~/Applications.
 install: app

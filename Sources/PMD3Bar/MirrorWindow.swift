@@ -16,7 +16,9 @@ final class MirrorWindows: NSObject, NSWindowDelegate {
         guard let model else { return }
         // Session and tools exist before the view renders (no state changes during a view update).
         _ = model.tools(for: udid)
-        if !(model.sessions[udid]?.isActive ?? false) { model.startMirroring(udid) }
+        let session = model.session(for: udid)
+        // Below iOS 27 there is no screen streaming: the window still offers the tools.
+        if !session.isActive, model.device(udid)?.supportsMirroring != false { model.startMirroring(udid) }
         if let w = windows[udid] {
             activate(w)
             return
@@ -38,6 +40,15 @@ final class MirrorWindows: NSObject, NSWindowDelegate {
         // Windows open: behave like a regular app (Dock, Cmd-Tab); back to menu-bar only when all close.
         NSApp.setActivationPolicy(.regular)
         activate(w)
+    }
+
+    /// ⌥⌘M: closes the window if it is the one in front, otherwise shows it.
+    func toggle(_ udid: String) {
+        if let w = windows[udid], w.isKeyWindow, NSApp.isActive {
+            w.performClose(nil)
+        } else {
+            show(udid)
+        }
     }
 
     private func activate(_ w: NSWindow) {
@@ -79,6 +90,7 @@ struct MirrorWindowView: View {
     private var session: MirrorSession { model.session(for: udid) }
     private var tools: DeviceTools { model.tools(for: udid) }
     private var device: Device? { model.device(udid) }
+    private var mirroringSupported: Bool { device?.supportsMirroring ?? true }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -106,7 +118,10 @@ struct MirrorWindowView: View {
         .toolbar { toolbar }
         .navigationTitle(device?.name ?? "iPhone")
         .navigationSubtitle(subtitle)
-        .onAppear { viewer.deviceName = device?.name ?? "iPhone" }
+        .onAppear {
+            viewer.deviceName = device?.name ?? "iPhone"
+            if !mirroringSupported { showTools = true }
+        }
     }
 
     private var subtitle: String {
@@ -118,6 +133,23 @@ struct MirrorWindowView: View {
     }
 
     @ViewBuilder private var screen: some View {
+        if !mirroringSupported {
+            placeholder {
+                VStack(spacing: 12) {
+                    Image(systemName: "rectangle.slash").font(.system(size: 40)).foregroundStyle(.secondary)
+                    Text("Il mirroring dello schermo richiede iOS \(Device.mirrorMinimumIOS) o successivo.\nQuesto iPhone ha iOS \(device?.productVersion ?? "?").")
+                        .multilineTextAlignment(.center)
+                    Text("App, file, posizione e log funzionano: usa gli Strumenti.").font(.caption).foregroundStyle(.secondary)
+                    Button("Mostra Strumenti") { showTools = true }
+                }
+                .padding()
+            }
+        } else {
+            mirrorScreen
+        }
+    }
+
+    @ViewBuilder private var mirrorScreen: some View {
         switch session.state {
         case .running:
             ViewerWebView(url: session.viewerURL, generation: session.generation, controller: viewer)
@@ -160,7 +192,7 @@ struct MirrorWindowView: View {
             case .idle:
                 Button { viewer.startRecording() } label: { Label("Registra", systemImage: "record.circle") }
                     .help("Registra lo schermo (video, senza audio) in Download")
-                    .disabled(session.state != .running)
+                    .disabled(session.state != .running || !mirroringSupported)
             case .recording(let since):
                 Button { viewer.stopRecording() } label: {
                     Label {
@@ -175,7 +207,9 @@ struct MirrorWindowView: View {
             }
             Button { NSWorkspace.shared.open(session.viewerURL) } label: { Label("Apri nel browser", systemImage: "safari") }
                 .disabled(session.state != .running)
-            if session.isActive {
+            if !mirroringSupported {
+                EmptyView()
+            } else if session.isActive {
                 Button { session.stop() } label: { Label("Ferma", systemImage: "stop.fill") }
             } else {
                 Button { session.start() } label: { Label("Avvia", systemImage: "play.fill") }
@@ -274,6 +308,15 @@ private struct AppsTab: View {
             if let err = tools.appsError { Text(err).font(.caption).foregroundStyle(.red).padding(.horizontal, 10) }
             List(filtered) { app in
                 HStack {
+                    Group {
+                        if let img = tools.icon(for: app.bundle_id) {
+                            Image(nsImage: img).resizable().interpolation(.high)
+                        } else {
+                            RoundedRectangle(cornerRadius: 7).fill(.quaternary)
+                        }
+                    }
+                    .frame(width: 30, height: 30)
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
                     VStack(alignment: .leading, spacing: 1) {
                         Text(app.name).lineLimit(1)
                         Text("\(app.bundle_id) · \(app.version)").font(.caption).foregroundStyle(.secondary).lineLimit(1)

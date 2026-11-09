@@ -133,16 +133,39 @@ struct MenuView: View {
         }
     }
 
+    @AppStorage("settingsExpanded") private var settingsExpanded = false
+
+    private var settings: some View {
+        DisclosureGroup("Impostazioni", isExpanded: $settingsExpanded) {
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle("Monta la Developer Disk Image appena colleghi un iPhone", isOn: $model.autoMountDDI)
+                Toggle("Notifiche (collegamento, montaggio, installazioni, errori)", isOn: $model.notificationsEnabled)
+                Toggle("Scorciatoia ⌥⌘M: mostra/nascondi la finestra dell'iPhone selezionato", isOn: $model.hotKeyEnabled)
+                if LoginItem.available {
+                    Toggle("Avvia al login", isOn: Binding(
+                        get: { model.launchAtLogin }, set: { model.setLaunchAtLogin($0) }))
+                }
+                HStack {
+                    Text("Porta iniziale")
+                    TextField("", value: $model.httpPort, format: .number.grouping(.never))
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 70)
+                        .help("Il primo iPhone usa questa porta, gli altri le successive libere")
+                }
+                if let err = model.settingsError {
+                    Text(err).foregroundStyle(.red)
+                }
+            }
+            .toggleStyle(.checkbox)
+            .font(.caption)
+            .padding(.top, 4)
+        }
+        .font(.caption)
+    }
+
     private var footer: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Porta iniziale").font(.caption)
-                TextField("", value: $model.httpPort, format: .number.grouping(.never))
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 70)
-                    .help("Il primo iPhone usa questa porta, gli altri le successive libere")
-                Spacer()
-            }
+            settings
             HStack {
                 Button("Aggiorna") {
                     Task {
@@ -235,9 +258,15 @@ struct DeviceRow: View {
         case .starting, .stopping:
             ProgressView().controlSize(.small)
         case .stopped, .failed:
-            Button(action: openWindow) { Image(systemName: "play.fill") }
-                .help("Avvia il mirroring in una finestra")
-                .disabled(!device.reachable)
+            if device.supportsMirroring {
+                Button(action: openWindow) { Image(systemName: "play.fill") }
+                    .help("Avvia il mirroring in una finestra")
+                    .disabled(!device.reachable)
+            } else {
+                Button(action: openWindow) { Image(systemName: "wrench.and.screwdriver") }
+                    .help("Strumenti: app, file, posizione, log (il mirroring richiede iOS \(Device.mirrorMinimumIOS)+)")
+                    .disabled(!device.reachable)
+            }
         }
     }
 }

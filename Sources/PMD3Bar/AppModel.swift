@@ -24,10 +24,34 @@ final class AppModel {
         didSet { UserDefaults.standard.set(httpPort, forKey: "httpPort") }
     }
 
+    // Settings (menu ▸ Impostazioni)
+    var autoMountDDI: Bool = UserDefaults.standard.object(forKey: "autoMountDDI") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(autoMountDDI, forKey: "autoMountDDI") }
+    }
+    var notificationsEnabled: Bool = UserDefaults.standard.object(forKey: "notifications") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(notificationsEnabled, forKey: "notifications")
+            if notificationsEnabled { Notifier.requestAuthorization() }
+        }
+    }
+    var hotKeyEnabled: Bool = UserDefaults.standard.object(forKey: "hotKey") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(hotKeyEnabled, forKey: "hotKey"); updateHotKey() }
+    }
+    var launchAtLogin: Bool = LoginItem.available && LoginItem.enabled
+    var settingsError: String?
+
     var selectedDevice: Device? { devices.first { $0.id == selectedUDID } }
     var activeSessions: [MirrorSession] { sessions.values.filter(\.isActive).sorted { $0.port < $1.port } }
 
     @ObservationIgnored private var tools: [String: DeviceTools] = [:]
+    /// Devices auto-mount already tried on since they connected (no retry loop on failure).
+    @ObservationIgnored private var autoMountTried: Set<String> = []
+    /// Presence bookkeeping for connect/disconnect notifications.
+    @ObservationIgnored private var firstListing = true
+    @ObservationIgnored private var goneSince: [String: Date] = [:]
+    @ObservationIgnored private var announcedGone: Set<String> = []
+    @ObservationIgnored private var knownNames: [String: String] = [:]
+    @ObservationIgnored private var hotKey: GlobalHotKey?
     private var pollTask: Task<Void, Never>?
     private var refreshingDevices = false
     private var signalSources: [DispatchSourceSignal] = []
@@ -51,7 +75,13 @@ final class AppModel {
             signalSources.append(source)
         }
         startPolling()
+        updateHotKey()
+        if notificationsEnabled { Notifier.requestAuthorization() }
         Task { await loadVersion() }
+    }
+
+    private func notify(_ title: String, _ body: String = "") {
+        Notifier.post(title, body, enabled: notificationsEnabled)
     }
 
     func device(_ udid: String) -> Device? { devices.first { $0.id == udid } }
@@ -97,6 +127,12 @@ final class AppModel {
                   mountStates[id] == nil || (previousSelected?.reachable == false && selectedDevice?.reachable == true) {
             await refreshMount(id)
         }
+        trackPresence(list)
+        // Newly reachable devices: read their mount state (and auto-mount if enabled).
+        for d in list where d.reachable && d.id != selectedUDID
+            && (previous[d.id] == nil || previous[d.id]?.reachable == false) {
+            Task { await refreshMount(d.id) }
+        }
         // Pulling the cable kills the USB tunnel under a running serve-web: restart it over Wi-Fi.
         for s in activeSessions {
             if let old = previous[s.udid], let new = device(s.udid), old.hasUSB, !new.hasUSB, new.reachable {
@@ -107,6 +143,35 @@ final class AppModel {
     }
 
     func select(_ udid: String) { selectedUDID = udid }
+
+    /// Notifies connections and disconnections. A Wi-Fi iPhone that dozes off vanishes for a few
+    /// seconds: only absences longer than 20 s count, and it is announced again only after that.
+    private func trackPresence(_ list: [Device]) {
+        let now = Date()
+        let present = Set(list.filter(\.reachable).map(\.id))
+        for d in list { knownNames[d.id] = d.name }
+        defer { firstListing = false }
+        for d in list where d.reachable {
+            goneSince[d.id] = nil
+            let isNew = !seenBefore.contains(d.id)
+            let isBack = announcedGone.remove(d.id) != nil
+            if !firstListing && (isNew || isBack) {
+                notify("iPhone collegato", "\(d.name) · \(d.connectionLabel)")
+            }
+            seenBefore.insert(d.id)
+        }
+        for id in seenBefore where !present.contains(id) {
+            let since = goneSince[id] ?? now
+            goneSince[id] = since
+            if now.timeIntervalSince(since) >= 20, !announcedGone.contains(id) {
+                announcedGone.insert(id)
+                autoMountTried.remove(id)  // next connection may need a new mount (e.g. after a reboot)
+                notify("iPhone scollegato", knownNames[id] ?? id)
+            }
+        }
+    }
+
+    @ObservationIgnored private var seenBefore: Set<String> = []
 
     // MARK: Developer Disk Image
 
@@ -119,18 +184,27 @@ final class AppModel {
         mountStates[udid] = result.ok
             ? (isDeveloperImageMounted(result.stdout) ? .mounted : .notMounted)
             : .failed(result.errorSummary)
+        if autoMountDDI, mountStates[udid] == .notMounted, device(udid)?.reachable == true,
+           !autoMountTried.contains(udid) {
+            autoMountTried.insert(udid)
+            PMD3.log("Montaggio automatico della DDI su \(device(udid)?.name ?? udid)")
+            await mount(udid, automatic: true)
+        }
     }
 
-    func mount(_ udid: String? = nil) async {
+    func mount(_ udid: String? = nil, automatic: Bool = false) async {
         guard let udid = udid ?? selectedUDID else { return }
+        let name = device(udid)?.name ?? udid
         mountStates[udid] = .mounting
         // auto-mount opens its own no-root userspace tunnel on iOS 17+.
         let result = await PMD3.run(["mounter", "auto-mount", "--udid", udid], timeout: 300)
         if result.ok {
             mountStates[udid] = nil
             await refreshMount(udid)
+            if automatic { notify("Developer Disk Image montata", name) }
         } else {
             mountStates[udid] = .failed(result.errorSummary)
+            notify("Montaggio DDI fallito", "\(name): \(result.errorSummary)")
         }
     }
 
@@ -144,6 +218,9 @@ final class AppModel {
         while used.contains(port) || !isLocalPortFree(port) { port += 1 }
         let s = MirrorSession(udid: udid, port: port)
         s.isDeviceReachable = { [weak self] in self?.device(udid)?.reachable == true }
+        s.onFailure = { [weak self] msg in
+            self?.notify("Mirroring interrotto", "\(self?.device(udid)?.name ?? udid): \(msg)")
+        }
         sessions[udid] = s
         return s
     }
@@ -167,6 +244,7 @@ final class AppModel {
     func tools(for udid: String) -> DeviceTools {
         if let t = tools[udid] { return t }
         let t = DeviceTools(udid: udid)
+        t.notify = { [weak self] title, body in self?.notify(title, body) }
         tools[udid] = t
         return t
     }
@@ -180,6 +258,30 @@ final class AppModel {
     private func shutdownAll() {
         for s in sessions.values { s.stopSync() }
         for t in tools.values { t.shutdown(clearLocation: false) }
+    }
+
+    // MARK: Settings
+
+    private func updateHotKey() {
+        if hotKeyEnabled, hotKey == nil {
+            hotKey = GlobalHotKey { [weak self] in
+                MainActor.assumeIsolated { self?.toggleSelectedWindow() }
+            }
+            if hotKey == nil { settingsError = "Scorciatoia ⌥⌘M già usata da un'altra app" }
+        } else if !hotKeyEnabled {
+            hotKey = nil
+        }
+    }
+
+    /// ⌥⌘M: shows the selected iPhone's window, or closes it if it is already in front.
+    func toggleSelectedWindow() {
+        guard let udid = selectedUDID ?? devices.first(where: \.reachable)?.id else { NSSound.beep(); return }
+        MirrorWindows.shared.toggle(udid)
+    }
+
+    func setLaunchAtLogin(_ on: Bool) {
+        settingsError = LoginItem.set(on)
+        launchAtLogin = LoginItem.enabled
     }
 
     // MARK: Misc

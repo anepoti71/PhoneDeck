@@ -10,6 +10,9 @@ Commands (device chosen with PYMOBILEDEVICE3_UDID, USB preferred over Wi-Fi):
   afc-ls PATH   JSON list of {name, dir, size, mtime} under /var/mobile/Media/PATH
   apps          JSON list of {bundle_id, name, version} of user apps (only these fields: the full
                 install metadata can carry app secrets and is never printed)
+  icons DIR BUNDLE_ID...
+                saves each app's home screen icon as DIR/<bundle_id>.png over one connection
+                (skips icons already there); prints the JSON list of bundle ids saved
 """
 
 import asyncio
@@ -106,6 +109,33 @@ async def user_apps() -> list[dict]:
         await lockdown.close()
 
 
+async def save_icons(out_dir: str, bundle_ids: list[str]) -> list[str]:
+    from pymobiledevice3.services.springboard import SpringBoardServicesService
+
+    os.makedirs(out_dir, exist_ok=True)
+    todo = [b for b in bundle_ids if not os.path.exists(os.path.join(out_dir, f"{b}.png"))]
+    if not todo:
+        return []
+    saved = []
+    lockdown = await _lockdown()
+    try:
+        async with SpringBoardServicesService(lockdown=lockdown) as springboard:
+            for bundle_id in todo:
+                try:
+                    png = await springboard.get_icon_pngdata(bundle_id)
+                except Exception:  # noqa: BLE001 - one missing icon must not stop the others
+                    continue
+                if png:
+                    tmp = os.path.join(out_dir, f".{bundle_id}.png.tmp")
+                    with open(tmp, "wb") as f:
+                        f.write(png)
+                    os.replace(tmp, os.path.join(out_dir, f"{bundle_id}.png"))
+                    saved.append(bundle_id)
+    finally:
+        await lockdown.close()
+    return saved
+
+
 def main() -> int:
     args = sys.argv[1:]
     if args == ["list"]:
@@ -114,6 +144,8 @@ def main() -> int:
         out = asyncio.run(afc_ls(args[1]))
     elif args == ["apps"]:
         out = asyncio.run(user_apps())
+    elif len(args) >= 2 and args[0] == "icons":
+        out = asyncio.run(save_icons(args[1], args[2:]))
     else:
         print(__doc__, file=sys.stderr)
         return 2
