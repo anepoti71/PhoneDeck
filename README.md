@@ -6,7 +6,6 @@ Your iPhones, right in the Mac menu bar. See and control their screen, install a
 and debug, over cable or Wi-Fi. No Xcode, no terminal, no admin password.
 
 Built on [pymobiledevice3](https://github.com/doronz88/pymobiledevice3), which ships inside the app.
-Formerly **PMD3Bar**.
 
 ## What you can do
 
