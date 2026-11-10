@@ -91,10 +91,10 @@ PMD3Bar.app/Contents/
 ```
 
 ```
-┌────────────── PMD3Bar (Swift) ──────────────┐
-│ Menu bar         Windows (WKWebView)         │
-│      │                 │ http://127.0.0.1:8080, 8081…
-└──────┼─────────────────┼─────────────────────┘
+┌────────────── PMD3Bar (Swift) ────────────────────────┐
+│ Menu bar         Windows (WKWebView)                  │
+│      │                 │ http://127.0.0.1:8080, 8081… │
+└──────┼─────────────────┼──────────────────────────────┘
        │ child processes │
        ▼                 ▼
   python -m pymobiledevice3 …         ← one process per command,
