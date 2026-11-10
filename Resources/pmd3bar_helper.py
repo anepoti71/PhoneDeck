@@ -29,6 +29,7 @@ import asyncio
 import json
 import os
 import posixpath
+import re
 import signal
 import sys
 import time
@@ -37,6 +38,7 @@ from pymobiledevice3 import usbmux
 from pymobiledevice3.lockdown import create_using_usbmux
 
 LOCKDOWN_TIMEOUT = 6
+BUNDLE_ID = re.compile(r"[A-Za-z0-9.-]{1,255}")
 
 
 class Refused(Exception):
@@ -276,7 +278,9 @@ async def save_icons(out_dir: str, bundle_ids: list[str]) -> list[str]:
     from pymobiledevice3.services.springboard import SpringBoardServicesService
 
     os.makedirs(out_dir, exist_ok=True)
-    todo = [b for b in bundle_ids if not os.path.exists(os.path.join(out_dir, f"{b}.png"))]
+    # Bundle IDs name files on the Mac: only Apple's allowed characters, so none can be a path.
+    valid = [b for b in bundle_ids if BUNDLE_ID.fullmatch(b) and b not in (".", "..")]
+    todo = [b for b in valid if not os.path.exists(os.path.join(out_dir, f"{b}.png"))]
     if not todo:
         return []
     saved = []

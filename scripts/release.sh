@@ -26,6 +26,12 @@ if [[ "${NOTARIZE:-1}" != "0" ]] && ! xcrun notarytool history --keychain-profil
     exit 1
 fi
 
+if [[ -f "$ROOT/build/python/UNLOCKED" ]]; then
+    echo "build/python was installed without the lock ($(cat "$ROOT/build/python/UNLOCKED"))." >&2
+    echo "Release only from the hash-pinned lock: make python (PMD3_VERSION=<v> make lock first to change version)." >&2
+    exit 1
+fi
+
 SIGN_IDENTITY="$IDENTITY" "$ROOT/scripts/build-app.sh"
 
 echo "==> Checking the signature"

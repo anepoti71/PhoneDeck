@@ -84,6 +84,7 @@ final class DeviceTools {
     func icon(for bundleID: String) -> NSImage? {
         _ = iconsGeneration
         if let img = iconCache.object(forKey: bundleID as NSString) { return img }
+        guard Safety.isBundleID(bundleID) else { return nil }
         let url = Self.iconsDir.appendingPathComponent("\(bundleID).png")
         guard let img = NSImage(contentsOf: url) else { return nil }
         iconCache.setObject(img, forKey: bundleID as NSString)
@@ -91,7 +92,7 @@ final class DeviceTools {
     }
 
     private func loadIcons() async {
-        let missing = apps.map(\.bundle_id).filter {
+        let missing = apps.map(\.bundle_id).filter(Safety.isBundleID).filter {
             !FileManager.default.fileExists(atPath: Self.iconsDir.appendingPathComponent("\($0).png").path)
         }
         guard !missing.isEmpty else { return }
@@ -260,6 +261,7 @@ final class DeviceTools {
         }
         report("Downloading \(app.name)'s container…", busy: true)
         var r = await PMD3.run(["apps", "pull", "--", app.bundle_id, "/", dest.path], udid: udid, timeout: 3600)
+        defer { markQuarantined(dest) }
         var what = "container"
         if !r.ok {
             // Not development-signed: the iPhone vends only its Documents folder, if the app shares files.
@@ -411,9 +413,11 @@ final class DeviceTools {
     /// Downloads a file or folder into ~/Downloads and shows it in Finder.
     func download(_ entry: FileEntry) async {
         let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
-        let dest = uniqueURL(downloads.appendingPathComponent(entry.name))
+        // The name comes from the iPhone: keep it a single file name inside Downloads.
+        let dest = uniqueURL(downloads.appendingPathComponent(Safety.fileName(entry.name, fallback: "iPhone file")))
         report("Downloading \(entry.name)…", busy: true)
         let r = await PMD3.run(filesCommand("pull", [path(for: entry), dest.path]), udid: udid, timeout: 1800)
+        if FileManager.default.fileExists(atPath: dest.path) { markQuarantined(dest) }
         if r.ok {
             report("\(entry.name) saved to Downloads")
             NSWorkspace.shared.activateFileViewerSelecting([dest])
@@ -711,6 +715,24 @@ final class DeviceTools {
             Task { _ = await PMD3.run(["developer", "dvt", "simulate-location", "clear"], udid: udid, timeout: 60) }
         }
     }
+}
+
+/// Marks a file (or every file in a folder) copied from the iPhone as downloaded, so Gatekeeper
+/// checks it before it can run: a `.app` or `.command` planted by an iOS app gets no free pass.
+func markQuarantined(_ url: URL) {
+    let properties: [String: Any] = [
+        kLSQuarantineAgentNameKey as String: "PhoneDeck",
+        kLSQuarantineTypeKey as String: kLSQuarantineTypeOtherDownload as String,
+    ]
+    func mark(_ item: URL) {
+        var item = item
+        var values = URLResourceValues()
+        values.quarantineProperties = properties
+        try? item.setResourceValues(values)
+    }
+    mark(url)
+    guard let walker = FileManager.default.enumerator(at: url, includingPropertiesForKeys: nil) else { return }
+    for case let item as URL in walker { mark(item) }
 }
 
 /// `name.ext` → `name 2.ext` … when the file already exists.

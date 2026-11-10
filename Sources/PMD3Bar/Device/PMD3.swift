@@ -78,16 +78,16 @@ enum PMD3 {
         }
         let p = Process()
         p.executableURL = python.url
-        p.arguments = pythonArgs
-        var env = ProcessInfo.processInfo.environment
-        env["PYTHONUNBUFFERED"] = "1"
+        // -I: isolated (ignores every PYTHON* variable, the user site and the current directory, so
+        // nothing outside the bundle can inject code); -u: unbuffered, so output arrives live;
+        // -B: no .pyc writes, keeping the signed bundle untouched.
+        p.arguments = ["-I", "-u", "-B"] + pythonArgs
+        var env = ProcessInfo.processInfo.environment.filter { key, _ in
+            !key.hasPrefix("PYTHON") && !key.hasPrefix("DYLD_")
+        }
         env["NO_COLOR"] = "1"
         env["TERM"] = "dumb"
         env["COLUMNS"] = "200"
-        if python.source == .embedded {
-            env["PYTHONNOUSERSITE"] = "1"
-            env["PYTHONDONTWRITEBYTECODE"] = "1"  // keep the signed bundle untouched
-        }
         if let udid { env["PYMOBILEDEVICE3_UDID"] = udid } else { env.removeValue(forKey: "PYMOBILEDEVICE3_UDID") }
         p.environment = env
         p.standardInput = FileHandle.nullDevice
@@ -105,7 +105,7 @@ enum PMD3 {
         guard let helperURL else {
             return RunResult(status: -1, stdout: Data(), stderr: "pmd3bar_helper.py not found")
         }
-        return await runPython(["-I", helperURL.path] + args, label: "helper " + args.joined(separator: " "),
+        return await runPython([helperURL.path] + args, label: "helper " + args.joined(separator: " "),
                                udid: udid, timeout: timeout)
     }
 

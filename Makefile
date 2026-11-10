@@ -1,4 +1,4 @@
-.PHONY: dev python python-rollback app release run install clean check check-static icon test
+.PHONY: dev python lock python-rollback app release run install clean check check-static icon test
 
 # The bundle macOS shows is PhoneDeck.app; executable, bundle id, logs and settings keep the PMD3Bar name.
 APP_NAME := PhoneDeck
@@ -12,6 +12,11 @@ dev:
 # Download the pinned CPython and install pymobiledevice3 into build/python.
 python:
 	./scripts/fetch-python.sh
+
+# Pin pymobiledevice3 $(PMD3_VERSION) and all its dependencies, with hashes, in scripts/pymobiledevice3.lock.
+lock:
+	@test -n "$(PMD3_VERSION)" || { echo "Usage: PMD3_VERSION=<version> make lock"; exit 1; }
+	./scripts/lock-python.sh "$(PMD3_VERSION)"
 
 # Put back the runtime that the last `make python` replaced (build/python.prev), and vice versa.
 python-rollback:

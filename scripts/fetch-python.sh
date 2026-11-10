@@ -9,9 +9,13 @@
 #
 # Output: build/python   (copied into PhoneDeck.app/Contents/Resources/python by build-app.sh)
 #
+# pymobiledevice3 and all its dependencies come from scripts/pymobiledevice3.lock: exact versions,
+# sha256-verified wheels only (no source builds). To change version: PMD3_VERSION=<v> make lock.
+#
 # Overrides:
-#   PMD3_VERSION=11.50.3   pymobiledevice3 version from PyPI
-#   PMD3_SPEC="git+https://github.com/doronz88/pymobiledevice3.git@master"   any pip requirement instead
+#   PMD3_SPEC="git+https://github.com/doronz88/pymobiledevice3.git@<commit>"   any pip requirement
+#                          instead of the lock, for testing only: the runtime is marked UNLOCKED and
+#                          `make release` refuses it
 #   CHECK_DEVICE=1         also run the device checks (an iPhone must be connected)
 #   FORCE=1                install even if the check fails
 set -euo pipefail
@@ -29,8 +33,13 @@ PBS_FILE="cpython-3.12.15+${PBS_TAG}-aarch64-apple-darwin-install_only.tar.gz"
 PBS_SHA256="921fc822416bbad146b026d2051dbfe08338ce4144ced64c56afd899a4351752"
 PBS_URL="https://github.com/astral-sh/python-build-standalone/releases/download/${PBS_TAG}/${PBS_FILE/+/%2B}"
 
-PMD3_VERSION="${PMD3_VERSION:-11.50.3}"
-PMD3_SPEC="${PMD3_SPEC:-pymobiledevice3==${PMD3_VERSION}}"
+LOCK="$ROOT/scripts/pymobiledevice3.lock"
+LOCKED_VERSION="$(sed -n 's/^pymobiledevice3==\([^ ]*\).*/\1/p' "$LOCK")"
+if [[ -n "${PMD3_VERSION:-}" && "$PMD3_VERSION" != "$LOCKED_VERSION" ]]; then
+    echo "The lock pins pymobiledevice3 $LOCKED_VERSION, not $PMD3_VERSION. First: PMD3_VERSION=$PMD3_VERSION make lock" >&2
+    exit 1
+fi
+PMD3_SPEC="${PMD3_SPEC:-}"
 
 if [[ "$(uname -m)" != "arm64" ]]; then
     echo "Questo script scarica il Python per Apple Silicon (arm64); questo Mac è $(uname -m)." >&2
@@ -56,9 +65,16 @@ mv "$EXTRACT/python" "$NEWDIR"
 /bin/rmdir "$EXTRACT"
 
 PY="$NEWDIR/bin/python3"
-echo "==> Installo $PMD3_SPEC"
-PYTHONNOUSERSITE=1 "$PY" -I -m pip install --disable-pip-version-check --no-warn-script-location \
-    --upgrade "$PMD3_SPEC"
+if [[ -z "$PMD3_SPEC" ]]; then
+    echo "==> Installing pymobiledevice3 $LOCKED_VERSION from the lock (hash-verified wheels)"
+    PYTHONNOUSERSITE=1 "$PY" -I -m pip install --disable-pip-version-check --no-warn-script-location \
+        --require-hashes --only-binary :all: --no-deps -r "$LOCK"
+else
+    echo "==> Installing $PMD3_SPEC WITHOUT the lock (testing only: make release will refuse this runtime)"
+    PYTHONNOUSERSITE=1 "$PY" -I -m pip install --disable-pip-version-check --no-warn-script-location \
+        --upgrade "$PMD3_SPEC"
+    echo "$PMD3_SPEC" > "$NEWDIR/UNLOCKED"
+fi
 
 echo "==> Pulizia e precompilazione"
 # Drop what the app never uses, then precompile so the signed bundle never needs to write .pyc files.

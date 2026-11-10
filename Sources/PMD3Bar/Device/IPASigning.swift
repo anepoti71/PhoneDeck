@@ -12,10 +12,15 @@ enum IPASigning {
     }
 
     /// An extracted `.ipa`. Delete it with `discard()` when done.
+    /// `dir` holds two folders: `unpacked` (the archive's content, untrusted) and `scratch` (files
+    /// the app writes, such as certificates and entitlements). Nothing is ever written into
+    /// `unpacked` by name from the archive, so a link planted in the `.ipa` can't redirect a write.
     struct Extracted {
         let dir: URL
         let app: URL
         let info: IPAInfo
+        var unpacked: URL { dir.appendingPathComponent("unpacked", isDirectory: true) }
+        var scratch: URL { dir.appendingPathComponent("scratch", isDirectory: true) }
 
         func discard() { try? FileManager.default.removeItem(at: dir) }
     }
@@ -25,17 +30,40 @@ enum IPASigning {
     static func extract(_ ipa: URL) async throws -> Extracted {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("PMD3Bar-ipa-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let unpacked = dir.appendingPathComponent("unpacked", isDirectory: true)
+        let scratch = dir.appendingPathComponent("scratch", isDirectory: true)
+        let fm = FileManager.default
+        try fm.createDirectory(at: unpacked, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        try fm.createDirectory(at: scratch, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         do {
-            try await tool("/usr/bin/ditto", ["-x", "-k", ipa.path, dir.path], "Can't unpack the .ipa")
-            let payload = dir.appendingPathComponent("Payload")
-            guard let app = (try? FileManager.default.contentsOfDirectory(at: payload, includingPropertiesForKeys: nil))?
+            try await tool("/usr/bin/ditto", ["-x", "-k", ipa.path, unpacked.path], "Can't unpack the .ipa")
+            try rejectLinks(in: unpacked)
+            let payload = unpacked.appendingPathComponent("Payload")
+            guard let app = (try? fm.contentsOfDirectory(at: payload, includingPropertiesForKeys: nil))?
                 .first(where: { $0.pathExtension == "app" })
             else { throw Failure("The .ipa has no Payload/*.app") }
-            return Extracted(dir: dir, app: app, info: try await inspect(app, scratch: dir))
+            return Extracted(dir: dir, app: app, info: try await inspect(app, scratch: scratch))
         } catch {
             try? FileManager.default.removeItem(at: dir)
             throw error
+        }
+    }
+
+    /// Apps never need symbolic links, and one could point a later write or `codesign --force` at a
+    /// file outside the archive (for example `~/.ssh/authorized_keys`): refuse the whole `.ipa`.
+    private static func rejectLinks(in root: URL) throws {
+        let keys: [URLResourceKey] = [.isSymbolicLinkKey]
+        guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys,
+                                                          options: [], errorHandler: { _, _ in false })
+        else { throw Failure("Can't read the unpacked .ipa") }
+        let base = root.resolvingSymlinksInPath().standardizedFileURL.path + "/"
+        for case let url as URL in walker {
+            if (try? url.resourceValues(forKeys: Set(keys)))?.isSymbolicLink == true {
+                throw Failure("The .ipa contains a symbolic link (\(url.lastPathComponent)): refused, apps don't need them")
+            }
+            guard url.standardizedFileURL.path.hasPrefix(base) || url.resolvingSymlinksInPath().path.hasPrefix(base) else {
+                throw Failure("The .ipa contains a path outside its folder: refused")
+            }
         }
     }
 
@@ -43,6 +71,7 @@ enum IPASigning {
         guard let plist = readPlist(app.appendingPathComponent("Info.plist")),
               let bundleID = plist["CFBundleIdentifier"] as? String
         else { throw Failure("The app has no readable Info.plist") }
+        guard Safety.isBundleID(bundleID) else { throw Failure("The app's bundle ID is not valid") }
 
         let details = await Shell.run("/usr/bin/codesign", ["-dv", app.path])
         let signature: IPAInfo.Signature
@@ -119,6 +148,8 @@ enum IPASigning {
     /// Copies a profile the user picked to where Xcode keeps them, so it is found next time too.
     static func addProfile(_ url: URL) throws -> ProvisioningProfile {
         guard let p = profile(at: url) else { throw Failure("\(url.lastPathComponent) is not a provisioning profile") }
+        // The UUID names the copy: it must be a UUID, not a path.
+        guard Safety.isProfileUUID(p.uuid) else { throw Failure("\(url.lastPathComponent) has an invalid UUID") }
         let dir = profileDirectories[1]
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let dest = dir.appendingPathComponent("\(p.uuid).mobileprovision")
@@ -157,6 +188,10 @@ enum IPASigning {
         let fm = FileManager.default
         let app = x.app
 
+        guard Safety.isBundleID(plan.bundleID) else { throw Failure("The bundle ID \(plan.bundleID) is not valid") }
+        // The tree was checked at extraction; check again in case anything changed it since.
+        try rejectLinks(in: x.unpacked)
+
         // Extensions need their own profile: an explicit one signs only the app.
         for ext in extensions(of: app) {
             let id = readPlist(ext.appendingPathComponent("Info.plist"))?["CFBundleIdentifier"] as? String
@@ -172,10 +207,11 @@ enum IPASigning {
                 throw Failure("Can't read \(bundle.lastPathComponent)/Info.plist")
             }
             let newID = bundle == app ? plan.bundleID : Signing.extensionID(oldID, from: x.info.bundleID, to: plan.bundleID)
+            guard Safety.isBundleID(newID) else { throw Failure("The bundle ID \(newID) is not valid") }
             if newID != oldID {
                 info["CFBundleIdentifier"] = newID
                 let data = try PropertyListSerialization.data(fromPropertyList: info, format: .binary, options: 0)
-                try data.write(to: infoURL)
+                try data.write(to: infoURL, options: .atomic)
             }
             let embedded = bundle.appendingPathComponent("embedded.mobileprovision")
             try? fm.removeItem(at: embedded)
@@ -185,10 +221,11 @@ enum IPASigning {
                 try await tool("/usr/bin/codesign", ["--force", "--sign", plan.identity.sha1, "--timestamp=none", code.path],
                                "Can't sign \(code.lastPathComponent)")
             }
-            let ent = x.dir.appendingPathComponent("entitlements-\(newID).plist")
+            // A fresh name in the app's own scratch folder, never a name derived from the archive.
+            let ent = x.scratch.appendingPathComponent("entitlements-\(UUID().uuidString).plist")
             let entData = try PropertyListSerialization.data(
                 fromPropertyList: Signing.entitlements(for: newID, profile: plan.profile), format: .xml, options: 0)
-            try entData.write(to: ent)
+            try entData.write(to: ent, options: [.atomic, .withoutOverwriting])
             try await tool("/usr/bin/codesign", ["--force", "--sign", plan.identity.sha1, "--timestamp=none",
                                                  "--generate-entitlement-der", "--entitlements", ent.path, bundle.path],
                            "Can't sign \(bundle.lastPathComponent)")
@@ -196,7 +233,7 @@ enum IPASigning {
 
         try? fm.removeItem(at: output)
         try await tool("/usr/bin/ditto", ["-c", "-k", "--norsrc", "--keepParent",
-                                          x.dir.appendingPathComponent("Payload").path, output.path],
+                                          x.unpacked.appendingPathComponent("Payload").path, output.path],
                        "Can't write \(output.lastPathComponent)")
     }
 

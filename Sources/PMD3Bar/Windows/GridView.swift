@@ -51,7 +51,8 @@ struct GridView: View {
             .padding(.horizontal, 10).padding(.top, 6)
             if s.state == .running {
                 ViewerWebView(url: s.viewerURL, generation: s.generation,
-                              controller: cache.controller(for: s.udid, name: model.device(s.udid)?.name ?? "iPhone"))
+                              controller: cache.controller(for: s.udid, name: model.device(s.udid)?.name ?? "iPhone"),
+                              credential: s.credential)
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).environment(\.colorScheme, .dark)
             }

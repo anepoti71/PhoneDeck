@@ -14,17 +14,20 @@ Exit code 0 = everything passed, 1 = something failed.
 """
 
 import argparse
+import base64
 import importlib
 import importlib.resources
 import inspect
 import json
 import os
+import secrets
 import shutil
 import socket
 import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -71,7 +74,7 @@ CLI = [
     (["version"], []),
     (["mounter", "list"], ["--udid"]),
     (["mounter", "auto-mount"], ["--udid"]),
-    (["developer", "core-device", "display", "serve-web"], ["--http-port"]),
+    (["developer", "core-device", "display", "serve-web"], ["--http-port", "--bind", "--password"]),
     (["developer", "core-device", "launch-application"], ["--env", "--kill-existing", "--no-kill-existing", "--console"]),
     (["apps", "webdav"], ["--mount", "--documents"]),
     (["developer", "dvt", "simulate-location", "set"], []),
@@ -355,31 +358,41 @@ def device_checks(helper_path: str, udid: str | None, location: bool) -> None:
 
 
 def serve_web_check(udid: str) -> None:
+    # Same flags as the app (MirrorSession.swift): loopback only, and a password on every request.
     port = free_port()
+    password = secrets.token_urlsafe(18)
+    auth = "Basic " + base64.b64encode(f"phonedeck:{password}".encode()).decode()
     p = subprocess.Popen([PY, "-I", "-m", "pymobiledevice3", "developer", "core-device", "display", "serve-web",
-                          "--http-port", str(port)],
+                          "--http-port", str(port), "--bind", "127.0.0.1", "--password", password],
                          stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, env=env(udid))
+
+    def get(with_auth: bool) -> tuple[int, str]:
+        req = urllib.request.Request(f"http://127.0.0.1:{port}/", headers={"Authorization": auth} if with_auth else {})
+        try:
+            with urllib.request.urlopen(req, timeout=1) as resp:
+                return resp.status, resp.read().decode(errors="ignore")
+        except urllib.error.HTTPError as e:
+            return e.code, ""
+
     try:
-        status = None
+        status, body = None, ""
         for _ in range(60):
             if p.poll() is not None:
                 break
             try:
-                with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=1) as resp:
-                    status = resp.status
-                    body = resp.read().decode(errors="ignore")
+                status, body = get(with_auth=True)
                 if status == 200:
                     break
             except Exception:  # noqa: BLE001
                 time.sleep(1)
         if status == 200:
-            record('id="c"' in body, f"serve-web risponde su :{port} con il canvas del viewer")
+            record('id="c"' in body, f"serve-web answers on :{port} with the viewer canvas")
+            record(get(with_auth=False)[0] == 401, "serve-web refuses requests without the password (401)")
         else:
             err = p.stderr.read().decode(errors="ignore") if p.poll() is not None else "timeout"
-            record(False, "serve-web", last_line(err) + " (la DDI è montata?)")
+            record(False, "serve-web", last_line(err) + " (is the DDI mounted?)")
     finally:
         stop(p)
-
 
 
 def location_check(udid: str) -> None:

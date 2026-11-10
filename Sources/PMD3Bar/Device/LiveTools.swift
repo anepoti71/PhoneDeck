@@ -314,7 +314,7 @@ final class NetworkCaptureTool {
         let proc = processFilter.trimmingCharacters(in: .whitespaces)
         if !proc.isEmpty { args += ["--process", proc] }
         if interface != .all { args += ["--interface", interface.rawValue] }
-        guard let p = try? PMD3.makePythonProcess(["-I", helper.path] + args, udid: udid) else {
+        guard let p = try? PMD3.makePythonProcess([helper.path] + args, udid: udid) else {
             error = "Python with pymobiledevice3 not found"
             return
         }

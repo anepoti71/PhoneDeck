@@ -103,7 +103,8 @@ struct MirrorWindowView: View {
     @ViewBuilder private var mirrorScreen: some View {
         switch session.state {
         case .running:
-            ViewerWebView(url: session.viewerURL, generation: session.generation, controller: viewer)
+            ViewerWebView(url: session.viewerURL, generation: session.generation, controller: viewer,
+                          credential: session.credential)
         case .starting:
             placeholder { ProgressView("Starting mirroring…").controlSize(.large) }
         case .stopping:
@@ -156,7 +157,7 @@ struct MirrorWindowView: View {
             case .saving:
                 ProgressView().controlSize(.small)
             }
-            Button { NSWorkspace.shared.open(session.viewerURL) } label: { Label("Open in browser", systemImage: "safari") }
+            Button { NSWorkspace.shared.open(session.browserURL) } label: { Label("Open in browser", systemImage: "safari") }
                 .disabled(session.state != .running)
             if !mirroringSupported {
                 EmptyView()

@@ -137,6 +137,9 @@ struct ViewerWebView: NSViewRepresentable {
     /// Changes whenever the viewer must be reloaded (serve-web restarted).
     let generation: Int
     let controller: ViewerController
+    /// Answers serve-web's password challenge. nil until the session has verified that the port is
+    /// held by its own serve-web.
+    let credential: URLCredential?
 
     func makeCoordinator() -> Coordinator { Coordinator(controller: controller) }
 
@@ -158,12 +161,16 @@ struct ViewerWebView: NSViewRepresentable {
         web.setValue(false, forKey: "drawsBackground")
         controller.webView = web
         context.coordinator.loadedGeneration = generation
+        context.coordinator.viewerURL = url
+        context.coordinator.credential = credential
         web.load(URLRequest(url: url))
         return web
     }
 
     func updateNSView(_ web: WKWebView, context: Context) {
         controller.webView = web
+        context.coordinator.viewerURL = url
+        context.coordinator.credential = credential
         if context.coordinator.loadedGeneration != generation || web.url?.port != url.port {
             context.coordinator.loadedGeneration = generation
             web.load(URLRequest(url: url))
@@ -178,6 +185,25 @@ struct ViewerWebView: NSViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler {
         let controller: ViewerController
         var loadedGeneration = -1
+        var viewerURL: URL?
+        var credential: URLCredential?
+
+        private var viewerPort: Int { viewerURL?.port ?? -1 }
+
+        /// serve-web asks for its password: answer only for this viewer's exact host and port.
+        func webView(_ webView: WKWebView, didReceive challenge: URLAuthenticationChallenge,
+                     completionHandler: @escaping @MainActor (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+            let space = challenge.protectionSpace
+            if space.authenticationMethod == NSURLAuthenticationMethodHTTPBasic, space.host == "127.0.0.1",
+               space.port == viewerPort, space.protocol == "http", challenge.previousFailureCount == 0,
+               let credential {
+                completionHandler(.useCredential, credential)
+            } else if space.authenticationMethod == NSURLAuthenticationMethodHTTPBasic {
+                completionHandler(.cancelAuthenticationChallenge, nil)
+            } else {
+                completionHandler(.performDefaultHandling, nil)
+            }
+        }
 
         init(controller: ViewerController) { self.controller = controller }
 
@@ -202,13 +228,22 @@ struct ViewerWebView: NSViewRepresentable {
         // Downloads (the viewer saves screenshots via <a download>, we do the same for recordings).
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                      decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
+            guard let url = action.request.url else { decisionHandler(.cancel); return }
+            let inViewer = Safety.isViewerURL(url, port: viewerPort)
+                || ["about", "blob", "data"].contains(url.scheme ?? "")
             if action.shouldPerformDownload {
-                decisionHandler(.download)
-            } else if let url = action.request.url, action.targetFrame == nil || url.host != "127.0.0.1" {
-                // Links leaving the viewer open in the default browser.
-                if url.host != "127.0.0.1" { NSWorkspace.shared.open(url); decisionHandler(.cancel) } else { decisionHandler(.allow) }
-            } else {
+                decisionHandler(inViewer ? .download : .cancel)
+            } else if inViewer && action.targetFrame != nil {
                 decisionHandler(.allow)
+            } else {
+                // Leaving the viewer: only a link the user clicked, to a web or mail address, goes to
+                // the default browser. Never file:, apps or custom schemes, never a scripted redirect.
+                if !inViewer, Safety.mayOpenExternally(url, userClicked: action.navigationType == .linkActivated) {
+                    NSWorkspace.shared.open(url)
+                } else if !inViewer {
+                    PMD3.log("[viewer] blocked navigation to \(url.scheme ?? "?"):…")
+                }
+                decisionHandler(.cancel)
             }
         }
 
@@ -228,7 +263,7 @@ struct ViewerWebView: NSViewRepresentable {
         func download(_ download: WKDownload, decideDestinationUsing response: URLResponse,
                       suggestedFilename: String, completionHandler: @escaping @MainActor (URL?) -> Void) {
             let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
-            let name = suggestedFilename.isEmpty ? "iPhone" : suggestedFilename
+            let name = Safety.fileName((suggestedFilename as NSString).lastPathComponent, fallback: "iPhone")
             let dest = uniqueURL(downloads.appendingPathComponent(name))
             pendingDestinations[ObjectIdentifier(download)] = dest
             completionHandler(dest)
@@ -238,6 +273,7 @@ struct ViewerWebView: NSViewRepresentable {
 
         func downloadDidFinish(_ download: WKDownload) {
             if let dest = pendingDestinations.removeValue(forKey: ObjectIdentifier(download)) {
+                markQuarantined(dest)
                 PMD3.log("Saved \(dest.path)")
                 NSWorkspace.shared.activateFileViewerSelecting([dest])
             }

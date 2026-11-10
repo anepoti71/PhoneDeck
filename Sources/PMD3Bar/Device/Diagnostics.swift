@@ -291,6 +291,7 @@ final class CrashesTool {
         try? FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
         report("Downloading \(e.name)…", false, true)
         let r = await PMD3.run(["crash", "pull", dest.path, fullPath(e)], udid: udid, timeout: 600)
+        markQuarantined(dest)
         if r.ok {
             report("\(e.name) saved to Downloads", false, false)
             NSWorkspace.shared.activateFileViewerSelecting([dest])

@@ -176,7 +176,7 @@ struct MenuView: View {
                     Button("What's new") { NSWorkspace.shared.open(AppModel.releasesURL) }
                     Button("Copy command") {
                         NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString("PMD3_VERSION=\(latest) make python && make install", forType: .string)
+                        NSPasteboard.general.setString("PMD3_VERSION=\(latest) make lock && make python && make install", forType: .string)
                     }
                     .help("Run it in the project folder: installs the new version only if it passes the check")
                 }

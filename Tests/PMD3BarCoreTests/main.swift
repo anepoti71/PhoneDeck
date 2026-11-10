@@ -367,6 +367,44 @@ suite("CaptureStats / WebDAVOutput") {
     check(WebDAVOutput.mountUnavailable(in: "Automatic mount is unavailable on this host"), "mount unavailable")
 }
 
-print("\n\(passed) controlli superati, \(failures.count) falliti")
+suite("Safety: bundle IDs, profile UUIDs, file names") {
+    check(Safety.isBundleID("com.example.App-2"), "normal bundle ID")
+    check(!Safety.isBundleID("com.x/../../.ssh/authorized_keys"), "slash and dot-dot rejected")
+    check(!Safety.isBundleID("com.x\nssh-ed25519 AAAA"), "newline rejected")
+    check(!Safety.isBundleID("") && !Safety.isBundleID("..") && !Safety.isBundleID("."), "empty and dots rejected")
+    check(!Safety.isBundleID(String(repeating: "a", count: 256)), "too long")
+    check(Safety.isProfileUUID("6B8C9E2A-1F3D-4C5B-9A7E-0D1C2B3A4F5E"), "profile UUID")
+    check(!Safety.isProfileUUID("../../../Library/LaunchAgents/x"), "path as UUID rejected")
+    check(!Safety.isProfileUUID("6B8C9E2A1F3D4C5B9A7E0D1C2B3A4F5E"), "UUID without dashes rejected")
+    check(Safety.isSafeFileName("Photo 1.jpg"), "plain name")
+    check(!Safety.isSafeFileName("../x") && !Safety.isSafeFileName("a/b") && !Safety.isSafeFileName(".."), "traversal")
+    check(!Safety.isSafeFileName("a\0b") && !Safety.isSafeFileName(""), "NUL and empty")
+    check(Safety.fileName("../../Library/LaunchAgents/x.plist", fallback: "f") == "..-..-Library-LaunchAgents-x.plist",
+          "separators replaced")
+    check(Safety.fileName("..", fallback: "iPhone") == "iPhone" && Safety.fileName("  ", fallback: "iPhone") == "iPhone",
+          "dot-only and blank fall back")
+}
+
+suite("Safety: viewer ports") {
+    check(Safety.firstFreePort(from: 8080, used: [], isFree: { _ in true }) == 8080, "start port when free")
+    check(Safety.firstFreePort(from: 8080, used: [8080], isFree: { $0 != 8081 }) == 8082, "skips used and busy")
+    check(Safety.firstFreePort(from: 70000, used: [], isFree: { _ in true }) == 65535, "clamped to 65535, no crash")
+    check(Safety.firstFreePort(from: 80, used: [], isFree: { _ in true }) == 1024, "clamped to 1024")
+    check(Safety.firstFreePort(from: 65535, used: [65535], isFree: { _ in true }) == nil, "none left")
+}
+
+suite("Safety: viewer navigation") {
+    let viewer = URL(string: "http://127.0.0.1:8080/")!
+    check(Safety.isViewerURL(viewer, port: 8080), "viewer origin")
+    check(!Safety.isViewerURL(viewer, port: 8081), "another port")
+    check(!Safety.isViewerURL(URL(string: "http://localhost:8080/")!, port: 8080), "another host name")
+    check(!Safety.isViewerURL(URL(string: "file:///127.0.0.1/x")!, port: 8080), "file URL")
+    check(Safety.mayOpenExternally(URL(string: "https://github.com/x")!, userClicked: true), "clicked web link")
+    check(!Safety.mayOpenExternally(URL(string: "https://github.com/x")!, userClicked: false), "scripted navigation")
+    check(!Safety.mayOpenExternally(URL(string: "file:///Users/Shared/evil.app")!, userClicked: true), "file URL")
+    check(!Safety.mayOpenExternally(URL(string: "x-apple.systempreferences:com.apple")!, userClicked: true), "custom scheme")
+}
+
+print("\n\(passed) checks passed, \(failures.count) failed")
 for f in failures { print("  ✗ \(f)") }
 exit(failures.isEmpty ? 0 : 1)

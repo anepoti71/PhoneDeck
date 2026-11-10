@@ -21,11 +21,26 @@ final class AppModel {
     var deviceError: String?
     var pmd3Version: String = "…"
     /// First port tried for the viewers; further iPhones get the next free ones.
-    var httpPort: Int = UserDefaults.standard.object(forKey: "httpPort") as? Int ?? 8080 {
-        didSet { UserDefaults.standard.set(httpPort, forKey: "httpPort") }
+    /// Values outside 1024–65535 are refused (they used to crash the app at the next mirroring).
+    var httpPort: Int = AppModel.storedStartingPort {
+        didSet {
+            guard Safety.viewerPorts.contains(httpPort) else {
+                settingsError = "The starting port must be between \(Safety.viewerPorts.lowerBound) and \(Safety.viewerPorts.upperBound)"
+                httpPort = oldValue
+                return
+            }
+            if settingsError?.hasPrefix("The starting port") == true { settingsError = nil }
+            UserDefaults.standard.set(httpPort, forKey: "httpPort")
+        }
     }
 
-    // Settings (menu ▸ Impostazioni)
+    /// The saved starting port, or 8080 when it is missing or out of range (e.g. saved by an older build).
+    private static var storedStartingPort: Int {
+        let saved = UserDefaults.standard.object(forKey: "httpPort") as? Int ?? 8080
+        return Safety.viewerPorts.contains(saved) ? saved : 8080
+    }
+
+    // Settings (menu ▸ Settings)
     var autoMountDDI: Bool = UserDefaults.standard.object(forKey: "autoMountDDI") as? Bool ?? true {
         didSet { UserDefaults.standard.set(autoMountDDI, forKey: "autoMountDDI") }
     }
@@ -222,8 +237,8 @@ final class AppModel {
     func session(for udid: String) -> MirrorSession {
         if let s = sessions[udid] { return s }
         let used = Set(sessions.values.map(\.port))
-        var port = max(1024, httpPort)
-        while used.contains(port) || !isLocalPortFree(port) { port += 1 }
+        // No port left: the session gets 0, and start() reports that instead of mirroring.
+        let port = Safety.firstFreePort(from: httpPort, used: used, isFree: isLocalPortFree) ?? 0
         let s = MirrorSession(udid: udid, port: port)
         s.isDeviceReachable = { [weak self] in self?.device(udid)?.reachable == true }
         s.onFailure = { [weak self] msg in
@@ -343,7 +358,7 @@ final class AppModel {
         if UserDefaults.standard.string(forKey: "notifiedPMD3Version") != version {
             UserDefaults.standard.set(version, forKey: "notifiedPMD3Version")
             notify("pymobiledevice3 \(version) available",
-                   "The app bundles \(pmd3Version). To update: PMD3_VERSION=\(version) make python && make install")
+                   "The app bundles \(pmd3Version). To update: PMD3_VERSION=\(version) make lock && make python && make install")
         }
     }
 

@@ -122,9 +122,11 @@ others the next free ones.
 
 ## 4. Updating pymobiledevice3
 
-The app contains **its own copy** of pymobiledevice3, pinned in `scripts/fetch-python.sh`
-(`PMD3_VERSION`, currently `11.50.3`). Published updates change nothing until you update, and
-the `pymobiledevice` conda env is separate.
+The app contains **its own copy** of pymobiledevice3, pinned together with every dependency in
+`scripts/pymobiledevice3.lock` (currently `11.50.3`): exact versions and the sha256 of each wheel.
+`make python` installs only from the lock (`--require-hashes`, wheels only, no source builds), so a
+compromised or replaced package on PyPI can't end up in the app. Published updates change nothing
+until you update, and the `pymobiledevice` conda env is separate.
 
 ### 4.1 Checking for a new version
 ```bash
@@ -137,7 +139,9 @@ The **Copy command** button copies the update command, to run in the project fol
 
 ### 4.2 Updating
 ```bash
-PMD3_VERSION=11.51.0 make python     # replace with the version you want
+PMD3_VERSION=11.51.0 make lock       # re-pins pymobiledevice3 and its dependencies (needs uv)
+git diff scripts/pymobiledevice3.lock   # review what changed, then commit it
+make python
 make install
 ```
 
@@ -150,12 +154,12 @@ make install
 If the check fails, `build/python` (and so the app) stays as it was. The rejected version stays
 in `build/python.new` for investigation, and `FORCE=1` installs it anyway.
 
-To try a fix that isn't released yet, use GitHub's `master`:
+To try a fix that isn't released yet, install it from GitHub, pinned to a commit:
 ```bash
-PMD3_SPEC="git+https://github.com/doronz88/pymobiledevice3.git@master" make python && make install
+PMD3_SPEC="git+https://github.com/doronz88/pymobiledevice3.git@<commit>" make python && make install
 ```
-
-To make the new version permanent, update `PMD3_VERSION` in `scripts/fetch-python.sh`.
+This bypasses the lock, so the runtime is marked `UNLOCKED` and `make release` refuses it. For
+everyday use and for releases, go back to `make python`.
 
 ### 4.3 Checking after the update
 
@@ -204,7 +208,8 @@ $PY -m pymobiledevice3 syslog live -h | grep -E -- '--format|--no-info|--process
 ```bash
 make python-rollback && make install     # swaps build/python with build/python.prev
 ```
-Running it again goes back to the new version. Alternatively: `PMD3_VERSION=11.50.3 make python && make install`.
+Running it again goes back to the new version. Alternatively, restore the previous lock
+(`git checkout <commit> -- scripts/pymobiledevice3.lock`) and run `make python && make install`.
 
 ## 5. Updating the bundled Python
 
@@ -278,6 +283,13 @@ PhoneDeck.app/Contents/
 - **Mirroring**: each iPhone gets a `developer core-device display serve-web` process on its own
   port (from 8080 up). Each process has its own tunnel, so several iPhones can run in parallel.
   The window shows the pymobiledevice3 web viewer in a WKWebView.
+  - The viewer is locked down: `--bind 127.0.0.1`, plus a random `--password` made for each start
+    and handed to serve-web on stdin (so `ps` never shows it). The window sends the password only
+    after checking that the port is held by its own serve-web process, so a program that grabbed the
+    port first gets neither the password nor a page in the window. "Open in browser" opens a URL
+    with the password in it.
+  - The window only follows the viewer's own address. A link you click to a web page opens in the
+    default browser; `file:` URLs, apps and custom schemes are never opened.
 - **`pmd3bar_helper.py`** does what the pymobiledevice3 command line can't:
   - lists iPhones even when a Wi-Fi connection doesn't answer (`usbmux list` fails entirely
     in that case);
@@ -300,7 +312,15 @@ PhoneDeck.app/Contents/
   profile; capabilities the profile doesn't grant are dropped.
 - **App files**: the whole container opens only for development-signed apps; for the others only
   the Documents folder, and only when the app shares its files. "Open in Finder" serves it over
-  WebDAV on 127.0.0.1 and mounts it with `mount_webdav`.
+  WebDAV on 127.0.0.1 and mounts it with `mount_webdav`. That server (pymobiledevice3's) has **no
+  password**: while it is mounted, any program or other account on this Mac that finds the port can
+  read and write the app's files. Unmount it (close the Finder window or press Stop) when done.
+- **Files copied from the iPhone** (Files, containers, crash reports, viewer downloads) are marked
+  as downloaded (quarantine), so Gatekeeper checks any app or script among them before it runs.
+  Names coming from the iPhone are kept to a single file name inside Downloads.
+- **`.ipa` files** are unpacked into their own temporary folder and refused if they contain a
+  symbolic link (apps don't need them, and one could redirect a write during resigning). Files
+  the app writes (certificates, entitlements) go into a separate folder, with generated names.
 - **App console**: launching with "Show its output" sets `NSUnbufferedIO=YES` and
   `OS_ACTIVITY_DT_MODE=YES`, as Xcode does, so `print` and `os_log`/`Logger` lines arrive live.
 
@@ -330,12 +350,14 @@ scripts/                    fetch-python.sh, build-app.sh, release.sh, check.py,
 | File | Contents |
 |---|---|
 | `Resources/pmd3bar_helper.py` | Extra Python functions (robust device list, files, apps, icons, crashes, info, capture) |
-| `scripts/fetch-python.sh` | Downloads CPython (sha256 verified), installs pymobiledevice3 into `build/python.new` and puts it in use only if it passes `check.py` |
+| `scripts/fetch-python.sh` | Downloads CPython (sha256 verified), installs pymobiledevice3 from the hash-pinned lock into `build/python.new` and puts it in use only if it passes `check.py` |
+| `scripts/pymobiledevice3.lock` | pymobiledevice3 and every dependency: exact versions and wheel sha256 |
+| `scripts/lock-python.sh` | Regenerates the lock for a pymobiledevice3 version (`make lock`, needs uv) |
 | `scripts/build-app.sh` | Builds, creates `build/PhoneDeck.app`, build number, ad-hoc signature (Developer ID with `SIGN_IDENTITY`) |
-| `scripts/release.sh` | Developer ID signature with hardened runtime, notarization, stapling, zip (`make release`) |
+| `scripts/release.sh` | Developer ID signature with hardened runtime, notarization, stapling, zip (`make release`); refuses a runtime installed without the lock |
 | `scripts/check.py` | Checks that pymobiledevice3 offers everything the app uses (`make check`) |
 | `scripts/make-icon.py` | Cuts out the artwork and generates every icon size (`make icon`) |
-| `Makefile` | `dev`, `python`, `python-rollback`, `app`, `release`, `run`, `install`, `test`, `check`, `check-static`, `icon`, `clean` |
+| `Makefile` | `dev`, `python`, `lock`, `python-rollback`, `app`, `release`, `run`, `install`, `test`, `check`, `check-static`, `icon`, `clean` |
 
 #### Limits worth knowing when changing the code
 
@@ -404,8 +426,10 @@ scripts/                    fetch-python.sh, build-app.sh, release.sh, check.py,
    overwrites them. Changes go in the project sources or upstream.
 3. **Pinned versions**: update pymobiledevice3 and Python deliberately, one at a time, and always
    run the [check](#43-checking-after-the-update) afterwards.
-4. **Network exposure**: the viewers listen on `127.0.0.1` only. Anyone who can reach the port can
-   see and **control** the iPhone: don't expose it on the network without a password and HTTPS.
+4. **Network exposure**: the viewers listen on `127.0.0.1` only and require a per-session password.
+   Anyone who can reach the port and has the password can see and **control** the iPhone: don't
+   expose it on the network without HTTPS. The "Open in Finder" WebDAV server has no password (see
+   [6.1](#61-how-its-built)).
 5. **Private repository**: if you make it public, the GPL obligations apply (see below), and it's
    worth double-checking that the history contains no personal data.
 6. **Distribution**: the app bundles GPL-3.0 software. If you give it to others, it must be
