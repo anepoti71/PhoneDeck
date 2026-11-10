@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Builds PMD3Bar.app for distribution: Developer ID signature with hardened runtime, notarized by
-# Apple and stapled, packed as build/PMD3Bar-<version>.zip. See RUNBOOK ("Release").
+# Builds PhoneDeck.app for distribution: Developer ID signature with hardened runtime, notarized by
+# Apple and stapled, packed as build/PhoneDeck-<version>.zip. See RUNBOOK ("Release").
 #
 #   SIGN_IDENTITY   Developer ID Application identity (default: the first one in the keychain)
 #   NOTARY_PROFILE  notarytool keychain profile (default: PMD3Bar), created once with
@@ -9,7 +9,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-APP="$ROOT/build/PMD3Bar.app"
+APP="$ROOT/build/PhoneDeck.app"
 NOTARY_PROFILE="${NOTARY_PROFILE:-PMD3Bar}"
 
 IDENTITY="${SIGN_IDENTITY:-$(security find-identity -v -p codesigning |
@@ -33,7 +33,7 @@ codesign --verify --deep --strict --verbose=2 "$APP"
 codesign -dvv "$APP" 2>&1 | grep -E '^(Authority=Developer ID Application|TeamIdentifier|Runtime Version)'
 
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
-ZIP="$ROOT/build/PMD3Bar-$VERSION.zip"
+ZIP="$ROOT/build/PhoneDeck-$VERSION.zip"
 /bin/rm -f "$ZIP"
 
 if [[ "${NOTARIZE:-1}" == "0" ]]; then

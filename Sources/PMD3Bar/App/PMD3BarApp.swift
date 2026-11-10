@@ -13,7 +13,7 @@ struct PMD3BarApp: App {
         let model = AppModel()
         _model = State(initialValue: model)
         MirrorWindows.shared.model = model
-        // `open PMD3Bar.app --args --open <UDID>` starts mirroring that iPhone in its window at launch.
+        // `open PhoneDeck.app --args --open <UDID>` starts mirroring that iPhone in its window at launch.
         let args = CommandLine.arguments
         if args.contains("--grid") {
             // Give the first device listing time to arrive.

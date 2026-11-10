@@ -1,4 +1,4 @@
-"""Checks that a pymobiledevice3 install still provides everything PMD3Bar relies on.
+"""Checks that a pymobiledevice3 install still provides everything PhoneDeck relies on.
 
 Run with the Python to check (the embedded one by default, see `make check`):
 
@@ -6,7 +6,7 @@ Run with the Python to check (the embedded one by default, see `make check`):
                                                 [--no-device] [--location]
 
 Static checks (no iPhone needed): CLI commands and options, Python APIs used by the helper,
-viewer assets, strings PMD3Bar waits for.
+viewer assets, strings PhoneDeck waits for.
 Device checks (first reachable iPhone, or --udid): device listing, mount status JSON, files,
 apps, system log, serve-web viewer. --location also sets and then clears a simulated location.
 
@@ -66,7 +66,7 @@ def skip(name: str, why: str) -> None:
 
 # ---------------------------------------------------------------- static checks
 
-# (command, options PMD3Bar passes to it)
+# (command, options PhoneDeck passes to it)
 CLI = [
     (["version"], []),
     (["mounter", "list"], ["--udid"]),
@@ -214,7 +214,7 @@ def free_port(start: int = 18080) -> int:
 
 def stop(p: subprocess.Popen) -> None:
     if p.poll() is None:
-        p.send_signal(2)  # SIGINT, like PMD3Bar
+        p.send_signal(2)  # SIGINT, like PhoneDeck
         try:
             p.wait(5)
         except subprocess.TimeoutExpired:

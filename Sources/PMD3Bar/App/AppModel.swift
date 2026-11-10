@@ -58,7 +58,7 @@ final class AppModel {
     private var signalSources: [DispatchSourceSignal] = []
 
     init() {
-        PMD3.log("PMD3Bar started, python: \(PMD3.python.map { "\($0.url.path) (\($0.source.rawValue))" } ?? "not found")")
+        PMD3.log("PhoneDeck started, python: \(PMD3.python.map { "\($0.url.path) (\($0.source.rawValue))" } ?? "not found")")
         NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -310,7 +310,7 @@ final class AppModel {
 
     func testNotification() {
         let names = devices.filter(\.reachable).map(\.name).joined(separator: ", ")
-        notify("PMD3Bar", names.isEmpty ? "Notifications work." : "Notifications work. Connected iPhones: \(names)")
+        notify("PhoneDeck", names.isEmpty ? "Notifications work." : "Notifications work. Connected iPhones: \(names)")
     }
 
     func setLaunchAtLogin(_ on: Bool) {

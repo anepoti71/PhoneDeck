@@ -1,12 +1,18 @@
-# PMD3Bar: runbook
+# PhoneDeck: runbook
 
-Procedures to build, run, update and troubleshoot PMD3Bar.
+Procedures to build, run, update and troubleshoot PhoneDeck.
+
+PhoneDeck was called PMD3Bar: the name you see (app bundle, menus, notifications, docs) changed, while
+the executable, the bundle ID `local.pmd3bar.PMD3Bar`, the Swift targets, the log and cache folders,
+the saved settings and the notarytool profile keep the old name, so nothing has to be migrated.
+`make install` removes `~/Applications/PMD3Bar.app` if it is still there. If "Launch at login" stops
+starting the app, turn it off and on again in Settings.
 For a project overview see the [README](README.md).
 
 All commands run from the project folder:
 
 ```bash
-cd path/to/PMD3Bar   # the cloned repository
+cd path/to/PhoneDeck   # the cloned repository
 ```
 
 - [1. First install](#1-first-install)
@@ -41,7 +47,7 @@ uname -m               # arm64 (the bundled Python is Apple Silicon only)
 **Build and install**
 ```bash
 make python     # downloads CPython 3.12 (sha256 verified) + pymobiledevice3 into build/python
-make install    # builds, creates build/PMD3Bar.app and copies it to ~/Applications
+make install    # builds, creates build/PhoneDeck.app and copies it to ~/Applications
 ```
 
 `make python` downloads about 25 MB and installs about a hundred packages: you need it once,
@@ -51,12 +57,12 @@ and then only to update pymobiledevice3.
 
 | Command | What it does |
 |---|---|
-| `open ~/Applications/PMD3Bar.app` | Starts the installed app |
-| `make run` | Rebuilds `build/PMD3Bar.app` and starts it (quits the running one first) |
+| `open ~/Applications/PhoneDeck.app` | Starts the installed app |
+| `make run` | Rebuilds `build/PhoneDeck.app` and starts it (quits the running one first) |
 | `make dev` | Runs from source with `swift run`, using the conda env's Python |
 | `make check` | Checks the bundled pymobiledevice3 (see [4.3](#43-checking-after-the-update)) |
-| `open build/PMD3Bar.app --args --open <UDID>` | Starts and immediately opens that iPhone's window |
-| `build/PMD3Bar.app/Contents/MacOS/PMD3Bar --ipa-check <file.ipa> <UDID>` | Checks an `.ipa` for that iPhone without the UI (see [7](#7-logs-and-diagnostics)) |
+| `open build/PhoneDeck.app --args --open <UDID>` | Starts and immediately opens that iPhone's window |
+| `build/PhoneDeck.app/Contents/MacOS/PMD3Bar --ipa-check <file.ipa> <UDID>` | Checks an `.ipa` for that iPhone without the UI (see [7](#7-logs-and-diagnostics)) |
 
 To find the iPhones' UDIDs:
 ```bash
@@ -97,7 +103,7 @@ build/python/bin/python3 -I Resources/pmd3bar_helper.py list
      - **Crashes**: double-click to read a report, right-click to download or delete it.
 5. **Grid**: with at least two iPhones on iOS 27 or later, menu ▸ **All in grid** shows them side
    by side in a single window (it starts mirroring where needed and stops it on close, except for
-   iPhones with their own window open). From the terminal: `open ~/Applications/PMD3Bar.app --args --grid`.
+   iPhones with their own window open). From the terminal: `open ~/Applications/PhoneDeck.app --args --grid`.
 6. Closing the window stops that iPhone's mirroring (unless it's in the grid), the active
    condition and the simulated location.
 
@@ -249,7 +255,7 @@ If you change Python's minor version (for example from 3.12 to 3.13), also updat
   ```bash
   tail -f ~/Library/Logs/PMD3Bar/pmd3bar.log
   ```
-- **Viewer in the window**: Safari ▸ Develop ▸ *Mac name* ▸ PMD3Bar, to inspect the WKWebView.
+- **Viewer in the window**: Safari ▸ Develop ▸ *Mac name* ▸ PhoneDeck, to inspect the WKWebView.
 - **Running processes**:
   ```bash
   pgrep -fl 'PMD3Bar|pymobiledevice3'
@@ -260,7 +266,7 @@ If you change Python's minor version (for example from 3.12 to 3.13), also updat
   and what to create on the developer portal. `--profile <file>` adds a profile that isn't
   installed; `--resign <out.ipa>` resigns it with the first plan.
   ```bash
-  build/PMD3Bar.app/Contents/MacOS/PMD3Bar --ipa-check ~/Downloads/App.ipa <UDID>
+  build/PhoneDeck.app/Contents/MacOS/PMD3Bar --ipa-check ~/Downloads/App.ipa <UDID>
   ```
 
 ## 8. Common problems
@@ -281,12 +287,12 @@ If you change Python's minor version (for example from 3.12 to 3.13), also updat
 | In iPhone-only mode the toolbar or panels come back, or the screen is small | A new viewer version changed ids or size calculation | `make check-static` flags it; update `layoutJS` in `WebView.swift` |
 | Recording doesn't start | The viewer changed (canvas `c`), or the stream isn't active yet | Wait for the video; see item 4 of the [check](#43-checking-after-the-update) |
 | "Screen streaming needs iOS 27.0 or later" | iPhone on iOS earlier than 27 | Normal: for that iPhone use Tools (🔧 button) |
-| No notifications | Permission denied, or app started with `make dev` | System Settings ▸ Notifications ▸ PMD3Bar; use the built app |
+| No notifications | Permission denied, or app started with `make dev` | System Settings ▸ Notifications ▸ PhoneDeck; use the built app |
 | ⌥⌘M does nothing | Shortcut already used by another app, or turned off | Menu ▸ Settings: a red message shows if registration failed |
 | Old or generic icon in Dock or Finder | macOS icon cache | `make install` re-registers the app with a new build number; if that's not enough: `killall Dock` |
 | Generic icon only in **notifications** | Notification Center stores the icon **per bundle ID** the first time it sees the app, and never updates it (its database is protected: restarting processes or changing version doesn't clear it) | Only fix: change `CFBundleIdentifier` in `Resources/Info.plist`, migrating settings as `migrateLegacyDefaults()` in `PMD3BarApp.swift` does. Done once already (`local.experiments.PMD3Bar` → `local.pmd3bar.PMD3Bar`). To avoid it: change the icon *before* the first notification |
 | The Location map doesn't show where the iPhone is | The iPhone's real location can't be read (see README, Known limitations) | The map starts from the Mac ("This Mac") or from the last simulated location; the ◎ button centers on the Mac |
-| "Mac location unavailable" | Location permission denied to PMD3Bar | System Settings ▸ Privacy & Security ▸ Location Services ▸ PMD3Bar |
+| "Mac location unavailable" | Location permission denied to PhoneDeck | System Settings ▸ Privacy & Security ▸ Location Services ▸ PhoneDeck |
 | "The iPhone would refuse …" when installing an `.ipa` | Ad-hoc or unsigned app, iPhone not in the profile, expired profile, profile for another App ID, or capabilities the profile doesn't grant | Follow the window: **Resign and Install** with a profile on this Mac, or create what it lists on the developer portal and add the profile with **Choose Profile…** (it is copied to `~/Library/MobileDevice/Provisioning Profiles`) |
 | Resigned app installs but App Groups, push or iCloud don't work | The profile used belongs to another App ID and doesn't grant them (the window warns) | Create an explicit App ID for the app's bundle ID with those capabilities and a profile for it |
 | App icons missing | Empty cache or iPhone unreachable while loading | ↻ button in the Apps panel; cache in `~/Library/Caches/PMD3Bar/icons` (safe to delete) |
@@ -294,7 +300,7 @@ If you change Python's minor version (for example from 3.12 to 3.13), also updat
 ## 9. Rules to follow
 
 1. **Never `sudo`** with pymobiledevice3 or pip: it creates root-owned files that then block
-   updates. The only case that needs it is `remote tunneld`, which PMD3Bar doesn't use.
+   updates. The only case that needs it is `remote tunneld`, which PhoneDeck doesn't use.
 2. **Never modify** files inside `build/python` or `site-packages`: the next `make python`
    overwrites them. Changes go in the project sources or upstream.
 3. **Pinned versions**: update pymobiledevice3 and Python deliberately, one at a time, and always
@@ -346,7 +352,7 @@ signature with hardened runtime and Apple's notarization:
    ```
    It builds with `SIGN_IDENTITY` set (`scripts/build-app.sh`), checks the signature, submits the
    zip to the notary service and waits, staples the ticket, and leaves
-   `build/PMD3Bar-<version>.zip`, ready to send. If Apple rejects it, the script prints Apple's log.
+   `build/PhoneDeck-<version>.zip`, ready to send. If Apple rejects it, the script prints Apple's log.
 3. `NOTARIZE=0 make release` signs without submitting, to test the hardened-runtime build.
 
 Entitlements: `Resources/PMD3Bar.entitlements` (the app: Mac location for the map) and

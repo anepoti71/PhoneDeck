@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Assembles build/PMD3Bar.app: release Swift binary + Info.plist + embedded Python.
+# Assembles build/PhoneDeck.app: release Swift binary + Info.plist + embedded Python.
 # Signed ad-hoc by default (fine on this Mac). SIGN_IDENTITY="Developer ID Application: …" signs it
 # for distribution instead: hardened runtime, secure timestamp, entitlements (see scripts/release.sh).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="$ROOT/build"
-APP="$BUILD/PMD3Bar.app"
+APP="$BUILD/PhoneDeck.app"  # bundle name shown by macOS; executable and bundle id stay PMD3Bar
 PYDIR="$BUILD/python"
 IDENTITY="${SIGN_IDENTITY:--}"
 
@@ -22,7 +22,7 @@ BIN="$(swift build -c release --arch arm64 --show-bin-path)/PMD3Bar"
 
 # A running copy of this bundle would lose its Python mid-run (ModuleNotFoundError): quit it first.
 if pgrep -f "$APP/Contents/MacOS/PMD3Bar" >/dev/null; then
-    echo "==> Quitting the running PMD3Bar"
+    echo "==> Quitting the running PhoneDeck"
     pkill -INT -f "$APP/Contents/MacOS/PMD3Bar" || true
     for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -f "$APP/Contents/MacOS/PMD3Bar" >/dev/null || break; sleep 0.5; done
 fi

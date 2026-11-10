@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the Python runtime that ships inside PMD3Bar.app:
+# Builds the Python runtime that ships inside PhoneDeck.app:
 # a relocatable CPython (astral-sh/python-build-standalone) with pymobiledevice3 installed into it.
 #
 # Safe update: everything is installed into build/python.new and verified with scripts/check.py.
@@ -7,7 +7,7 @@
 # build/python.prev (`make python-rollback` puts it back). If the check fails, build/python is
 # left untouched and build/python.new stays there for inspection.
 #
-# Output: build/python   (copied into PMD3Bar.app/Contents/Resources/python by build-app.sh)
+# Output: build/python   (copied into PhoneDeck.app/Contents/Resources/python by build-app.sh)
 #
 # Overrides:
 #   PMD3_VERSION=11.50.3   pymobiledevice3 version from PyPI

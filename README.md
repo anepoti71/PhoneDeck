@@ -1,12 +1,13 @@
-# PMD3Bar
+# PhoneDeck
 
-<img src="Resources/AppIcon.png" width="128" alt="PMD3Bar icon">
+<img src="Resources/AppIcon.png" width="128" alt="PhoneDeck icon">
 
 A macOS menu bar app to view and control one or more iPhones from your Mac, over cable or Wi-Fi.
 It uses [pymobiledevice3](https://github.com/doronz88/pymobiledevice3), bundled in the app with its own
 Python: no `sudo`, no `tunneld`, no terminal needed.
 
 To install, update and troubleshoot, see the **[RUNBOOK](RUNBOOK.md)**.
+Formerly **PMD3Bar**: the executable and bundle ID keep that name.
 
 ## What it does
 
@@ -72,10 +73,10 @@ To install, update and troubleshoot, see the **[RUNBOOK](RUNBOOK.md)**.
 ## Quick start
 
 ```bash
-cd path/to/PMD3Bar   # the cloned repository
+cd path/to/PhoneDeck   # the cloned repository
 make python    # once: prepares the Python bundled in the app (about 260 MB)
 make install   # builds the app and copies it to ~/Applications
-open ~/Applications/PMD3Bar.app
+open ~/Applications/PhoneDeck.app
 ```
 
 Then, from the iPhone icon in the menu bar: **Mount** the DDI if needed, and press ▶ next to the iPhone.
@@ -83,7 +84,7 @@ Then, from the iPhone icon in the menu bar: **Mount** the DDI if needed, and pre
 ## How it's built
 
 ```
-PMD3Bar.app/Contents/
+PhoneDeck.app/Contents/
 ├── MacOS/PMD3Bar                SwiftUI interface (menu bar + windows)
 └── Resources/
     ├── python/                  standalone CPython 3.12 + pymobiledevice3 (pinned version)
@@ -91,7 +92,7 @@ PMD3Bar.app/Contents/
 ```
 
 ```
-┌────────────── PMD3Bar (Swift) ────────────────────────┐
+┌────────────── PhoneDeck (Swift) ──────────────────────┐
 │ Menu bar         Windows (WKWebView)                  │
 │      │                 │ http://127.0.0.1:8080, 8081… │
 └──────┼─────────────────┼──────────────────────────────┘
@@ -151,7 +152,7 @@ scripts/                    fetch-python.sh, build-app.sh, release.sh, check.py,
 |---|---|
 | `Resources/pmd3bar_helper.py` | Extra Python functions (robust device list, files, apps, icons, crashes) |
 | `scripts/fetch-python.sh` | Downloads CPython (sha256 verified), installs pymobiledevice3 into `build/python.new` and puts it in use only if it passes `check.py` |
-| `scripts/build-app.sh` | Builds, creates `build/PMD3Bar.app`, build number, ad-hoc signature (Developer ID with `SIGN_IDENTITY`) |
+| `scripts/build-app.sh` | Builds, creates `build/PhoneDeck.app`, build number, ad-hoc signature (Developer ID with `SIGN_IDENTITY`) |
 | `scripts/release.sh` | Developer ID signature with hardened runtime, notarization, stapling, zip (`make release`) |
 | `scripts/check.py` | Checks that pymobiledevice3 offers everything the app uses (`make check`) |
 | `scripts/make-icon.py` | Cuts out the artwork and generates every icon size (`make icon`) |

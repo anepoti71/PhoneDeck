@@ -53,9 +53,9 @@ enum MenuBarIcon {
         }
         img.isTemplate = true
         img.accessibilityDescription = switch state {
-        case .idle: "PMD3Bar"
-        case .mirroring: "PMD3Bar: mirroring active"
-        case .noDevice: "PMD3Bar: no iPhone"
+        case .idle: "PhoneDeck"
+        case .mirroring: "PhoneDeck: mirroring active"
+        case .noDevice: "PhoneDeck: no iPhone"
         }
         return img
     }

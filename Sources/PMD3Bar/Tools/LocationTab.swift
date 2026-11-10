@@ -102,7 +102,7 @@ struct LocationTab: View {
     @ViewBuilder private var macStatus: some View {
         switch mac.status {
         case .denied:
-            Text("Mac location unavailable: allow it in System Settings ▸ Privacy & Security ▸ Location Services ▸ PMD3Bar.")
+            Text("Mac location unavailable: allow it in System Settings ▸ Privacy & Security ▸ Location Services ▸ PhoneDeck.")
                 .font(.caption2).foregroundStyle(.orange)
         case .failed(let msg):
             Text("Mac location unavailable (\(msg)).").font(.caption2).foregroundStyle(.orange)

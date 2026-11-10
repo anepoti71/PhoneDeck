@@ -164,7 +164,7 @@ struct MenuView: View {
                         }
                     }
                     FooterButton(icon: "doc.text.magnifyingglass", help: "Open the log") { model.openLog() }
-                    FooterButton(icon: "power", help: "Quit PMD3Bar") { NSApplication.shared.terminate(nil) }
+                    FooterButton(icon: "power", help: "Quit PhoneDeck") { NSApplication.shared.terminate(nil) }
                         .keyboardShortcut("q")
                 }
             }

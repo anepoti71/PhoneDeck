@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>PMD3Bar</string>
+    <string>PhoneDeck</string>
     <key>CFBundleDisplayName</key>
-    <string>PMD3Bar</string>
+    <string>PhoneDeck</string>
     <key>CFBundleIdentifier</key>
     <string>local.pmd3bar.PMD3Bar</string>
     <key>CFBundleIconFile</key>
@@ -25,10 +25,10 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSLocationUsageDescription</key>
-    <string>PMD3Bar centers the simulated-location map on the Mac, near the connected iPhone.</string>
+    <string>PhoneDeck centers the simulated-location map on the Mac, near the connected iPhone.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>PMD3Bar centers the simulated-location map on the Mac, near the connected iPhone.</string>
+    <string>PhoneDeck centers the simulated-location map on the Mac, near the connected iPhone.</string>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>PMD3Bar talks to the iPhone over Wi-Fi too, and through the iOS developer tunnel.</string>
+    <string>PhoneDeck talks to the iPhone over Wi-Fi too, and through the iOS developer tunnel.</string>
 </dict>
 </plist>
