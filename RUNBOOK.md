@@ -7,7 +7,7 @@ the executable, the bundle ID `local.pmd3bar.PMD3Bar`, the Swift targets, the lo
 the saved settings and the notarytool profile keep the old name, so nothing has to be migrated.
 `make install` removes `~/Applications/PMD3Bar.app` if it is still there. If "Launch at login" stops
 starting the app, turn it off and on again in Settings.
-For a project overview see the [README](README.md).
+For what the app does see the [README](README.md); for how it is built, [6.1](#61-how-its-built).
 
 All commands run from the project folder:
 
@@ -246,7 +246,106 @@ If you change Python's minor version (for example from 3.12 to 3.13), also updat
   propose them upstream.
 - Long-running commands (mirroring, location, log) must always be stopped with SIGINT first, then,
   if still running after a few seconds, with SIGTERM. `syslog live` ignores SIGINT when it receives
-  many lines.
+  many lines. Two exceptions: `apps webdav --mount` hangs after unmounting on SIGINT, so the app
+  unmounts the volume itself and then sends SIGTERM; `pmd3bar_helper.py pcap` stops on SIGTERM.
+
+### 6.1 How it's built
+
+```
+PhoneDeck.app/Contents/
+├── MacOS/PMD3Bar                SwiftUI interface (menu bar + windows)
+└── Resources/
+    ├── python/                  standalone CPython 3.12 + pymobiledevice3 (pinned version)
+    └── pmd3bar_helper.py        Python functions the command line doesn't offer
+```
+
+```
+┌────────────── PhoneDeck (Swift) ──────────────────────┐
+│ Menu bar         Windows (WKWebView)                  │
+│      │                 │ http://127.0.0.1:8080, 8081… │
+└──────┼─────────────────┼──────────────────────────────┘
+       │ child processes │
+       ▼                 ▼
+  python -m pymobiledevice3 …         ← one process per command,
+  python pmd3bar_helper.py …            one serve-web per iPhone
+       │
+       ▼  usbmuxd (USB / Wi-Fi) + rootless iOS 17+ tunnel
+    iPhone
+```
+
+- **The app doesn't import Python**: it runs `python -m pymobiledevice3 …` as a child process and
+  reads the JSON output. The target iPhone is set by the `PYMOBILEDEVICE3_UDID` variable.
+- **Mirroring**: each iPhone gets a `developer core-device display serve-web` process on its own
+  port (from 8080 up). Each process has its own tunnel, so several iPhones can run in parallel.
+  The window shows the pymobiledevice3 web viewer in a WKWebView.
+- **`pmd3bar_helper.py`** does what the pymobiledevice3 command line can't:
+  - lists iPhones even when a Wi-Fi connection doesn't answer (`usbmux list` fails entirely
+    in that case);
+  - lists folders with file type and size, in the Media folder or an app's container (falling back
+    to its Documents folder when the whole container is refused);
+  - reads device identity, storage and battery for the Info tab, keeping only the fields shown;
+  - captures network traffic to a pcapng file, printing a summary twice a second instead of every
+    packet;
+  - lists apps with name, bundle ID and version only, without the full metadata, which can
+    contain app keys;
+  - fetches app icons over a single connection and caches them in `~/Library/Caches/PMD3Bar/icons`.
+- **Which Python**, in order of priority:
+  1. the one bundled in the app;
+  2. the `PMD3_PYTHON` environment variable;
+  3. `~/miniforge3/envs/pymobiledevice/bin/python` (handy with `make dev`).
+- **Installing an `.ipa`**: it is first checked against the iPhone (signature, provisioning profile,
+  UDID, bundle ID, certificate, entitlements). If the iPhone would refuse it, the window offers to
+  resign it with a profile and Apple Development identity on this Mac, or lists what to create on
+  the developer portal. Extensions need their own profiles and are left out with an explicit
+  profile; capabilities the profile doesn't grant are dropped.
+- **App files**: the whole container opens only for development-signed apps; for the others only
+  the Documents folder, and only when the app shares its files. "Open in Finder" serves it over
+  WebDAV on 127.0.0.1 and mounts it with `mount_webdav`.
+- **App console**: launching with "Show its output" sets `NSUnbufferedIO=YES` and
+  `OS_ACTIVITY_DT_MODE=YES`, as Xcode does, so `print` and `os_log`/`Logger` lines arrive live.
+
+#### Sources
+
+```
+Sources/PMD3BarCore/        pure logic, no UI: tested by `make test`
+  Models.swift              Device and parsing of the iPhone list, DDI and mirroring states
+  RunResult.swift           command result and readable error message
+  Versions.swift            version comparison (update notice)
+  ViewerLayout.swift        viewer geometry and width of the "iPhone only" window
+  Signing.swift             .ipa checks, provisioning profiles, resign plans, portal requirements
+  DeviceInfo.swift          Info tab parsing, launch options, Files tab scope (Media or app container)
+  LiveOutput.swift          console line buffer, capture totals, WebDAV mount output
+  DeviceDates.swift         dates written by the helper (crash reports)
+Sources/PMD3Bar/
+  App/                      startup, menu bar menu, state, settings, notifications, menu bar icon
+  Device/                   running pymobiledevice3, mirroring sessions, iPhone tools, .ipa resigning
+  Viewer/WebView.swift      viewer WKWebView: layout, recording with audio, downloads
+  Windows/                  per-iPhone window, grid, window sizing
+  Tools/                    Tools panel, one tab per file
+Tests/PMD3BarCoreTests/     tests for the pure logic (`make test`)
+Resources/                  Info.plist, entitlements, pmd3bar_helper.py, icons
+scripts/                    fetch-python.sh, build-app.sh, release.sh, check.py, make-icon.py
+```
+
+| File | Contents |
+|---|---|
+| `Resources/pmd3bar_helper.py` | Extra Python functions (robust device list, files, apps, icons, crashes, info, capture) |
+| `scripts/fetch-python.sh` | Downloads CPython (sha256 verified), installs pymobiledevice3 into `build/python.new` and puts it in use only if it passes `check.py` |
+| `scripts/build-app.sh` | Builds, creates `build/PhoneDeck.app`, build number, ad-hoc signature (Developer ID with `SIGN_IDENTITY`) |
+| `scripts/release.sh` | Developer ID signature with hardened runtime, notarization, stapling, zip (`make release`) |
+| `scripts/check.py` | Checks that pymobiledevice3 offers everything the app uses (`make check`) |
+| `scripts/make-icon.py` | Cuts out the artwork and generates every icon size (`make icon`) |
+| `Makefile` | `dev`, `python`, `python-rollback`, `app`, `release`, `run`, `install`, `test`, `check`, `check-static`, `icon`, `clean` |
+
+#### Limits worth knowing when changing the code
+
+- Recordings include audio only if the viewer is playing it (audio on).
+- Simulated location and launching apps need the Developer Disk Image mounted.
+- The iPhone's **real** location can't be read from the Mac: the developer services only allow
+  setting or clearing the simulated one, and coordinates are redacted in `locationd` logs. That's
+  why the map uses the Mac's location, which is close to the connected iPhone.
+- The app depends on pymobiledevice3 commands and internal functions: update it following
+  [4](#4-updating-pymobiledevice3).
 
 ## 7. Logs and diagnostics
 
@@ -291,7 +390,7 @@ If you change Python's minor version (for example from 3.12 to 3.13), also updat
 | ⌥⌘M does nothing | Shortcut already used by another app, or turned off | Menu ▸ Settings: a red message shows if registration failed |
 | Old or generic icon in Dock or Finder | macOS icon cache | `make install` re-registers the app with a new build number; if that's not enough: `killall Dock` |
 | Generic icon only in **notifications** | Notification Center stores the icon **per bundle ID** the first time it sees the app, and never updates it (its database is protected: restarting processes or changing version doesn't clear it) | Only fix: change `CFBundleIdentifier` in `Resources/Info.plist`, migrating settings as `migrateLegacyDefaults()` in `PMD3BarApp.swift` does. Done once already (`local.experiments.PMD3Bar` → `local.pmd3bar.PMD3Bar`). To avoid it: change the icon *before* the first notification |
-| The Location map doesn't show where the iPhone is | The iPhone's real location can't be read (see README, Known limitations) | The map starts from the Mac ("This Mac") or from the last simulated location; the ◎ button centers on the Mac |
+| The Location map doesn't show where the iPhone is | The iPhone's real location can't be read (see [6.1](#61-how-its-built)) | The map starts from the Mac ("This Mac") or from the last simulated location; the ◎ button centers on the Mac |
 | "Mac location unavailable" | Location permission denied to PhoneDeck | System Settings ▸ Privacy & Security ▸ Location Services ▸ PhoneDeck |
 | "The iPhone would refuse …" when installing an `.ipa` | Ad-hoc or unsigned app, iPhone not in the profile, expired profile, profile for another App ID, or capabilities the profile doesn't grant | Follow the window: **Resign and Install** with a profile on this Mac, or create what it lists on the developer portal and add the profile with **Choose Profile…** (it is copied to `~/Library/MobileDevice/Provisioning Profiles`) |
 | Resigned app installs but App Groups, push or iCloud don't work | The profile used belongs to another App ID and doesn't grant them (the window warns) | Create an explicit App ID for the app's bundle ID with those capabilities and a profile for it |
