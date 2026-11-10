@@ -34,8 +34,10 @@ To install, update and troubleshoot, see the **[RUNBOOK](RUNBOOK.md)**.
 - Screen recording **with the iPhone's audio** and screenshots, saved to `~/Downloads`.
 - **Tools** panel (icon on the right of the window toolbar):
   - **Apps**: installed apps with icons, `.ipa` install, launch, uninstall.
-    **Launch with options** passes arguments and environment variables (remembered per app).
-    Right-click an app to browse its files or **download its container** to `~/Downloads`.
+    **Launch with options** passes arguments and environment variables (remembered per app), and can
+    show the app's output (print, NSLog, os_log, Logger) in the Console tab, as Xcode does.
+    Right-click an app to browse its files, **open its container in Finder** (mounted over WebDAV:
+    edits go straight to the iPhone) or **download it** to `~/Downloads`.
     Before installing, the `.ipa` is checked against the iPhone (signature, provisioning profile,
     UDID, bundle ID, certificate, entitlements). If the iPhone would refuse it, the window says why
     and offers to **resign** it with a profile and certificate on this Mac (saved to `~/Downloads`).
@@ -51,6 +53,9 @@ To install, update and troubleshoot, see the **[RUNBOOK](RUNBOOK.md)**.
     - **Processes**: CPU and memory of each process, with the option to kill it.
     - **Crashes**: crash and diagnostic reports, to read, download or delete.
     - **Log**: live system log, with filters and export.
+    - **Console**: stdout and stderr of an app launched with "Show its output", with export.
+    - **Network**: captures the iPhone's traffic (all, or one process or interface) to a `.pcapng`
+      in `~/Downloads`, with live totals per process; opens it in Wireshark when installed.
   - **Info**: model, iOS build, serial number, UDID and the other identifiers (right-click to copy),
     storage used and free, battery charge, maximum capacity, cycles and temperature. Restart and
     shut down.
@@ -109,6 +114,8 @@ PMD3Bar.app/Contents/
   - lists folders with file type and size, in the Media folder or an app's container (falling back
     to its Documents folder when the whole container is refused);
   - reads device identity, storage and battery for the Info tab, keeping only the fields shown;
+  - captures network traffic to a pcapng file, printing a summary twice a second instead of every
+    packet;
   - lists apps with name, bundle ID and version only, without the full metadata, which can
     contain app keys;
   - fetches app icons over a single connection and caches them in `~/Library/Caches/PMD3Bar/icons`.
@@ -127,6 +134,7 @@ Sources/PMD3BarCore/        pure logic, no UI: tested by `make test`
   ViewerLayout.swift        viewer geometry and width of the "iPhone only" window
   Signing.swift             .ipa checks, provisioning profiles, resign plans, portal requirements
   DeviceInfo.swift          Info tab parsing, launch options, Files tab scope (Media or app container)
+  LiveOutput.swift          console line buffer, capture totals, WebDAV mount output
   DeviceDates.swift         dates written by the helper (crash reports)
 Sources/PMD3Bar/
   App/                      startup, menu bar menu, state, settings, notifications, menu bar icon

@@ -5,8 +5,8 @@ import PMD3BarCore
 
 struct AppsTab: View {
     let tools: DeviceTools
-    /// Switches the panel to the Files tab (after the app's container was selected there).
-    var showFilesTab: () -> Void = {}
+    /// Switches the panel to another tab (Files for an app's container, Console for its output).
+    var showTab: (ToolTab) -> Void = { _ in }
     @State private var search = ""
     @State private var confirmUninstall: DeviceTools.AppInfo?
     @State private var launchWithOptions: DeviceTools.AppInfo?
@@ -43,6 +43,12 @@ struct AppsTab: View {
                         Text("\(app.bundle_id) · \(app.version)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                     Spacer()
+                    if tools.mounts.isMounted(app.bundle_id) {
+                        Button { tools.mounts.open(app.bundle_id, name: app.name) } label: {
+                            Image(systemName: "externaldrive.connected.to.line.below")
+                        }
+                        .buttonStyle(.borderless).help("Mounted in Finder: click to show it")
+                    }
                     Button { Task { await tools.launch(app) } } label: { Image(systemName: "play.circle") }
                         .buttonStyle(.borderless).help("Launch")
                 }
@@ -51,8 +57,14 @@ struct AppsTab: View {
                     Button("Launch with Options…") { launchWithOptions = app }
                     Divider()
                     Button("Show Files") {
-                        showFilesTab()
+                        showTab(.files)
                         Task { await tools.showFiles(of: app) }
+                    }
+                    if tools.mounts.isMounted(app.bundle_id) {
+                        Button("Show in Finder") { tools.mounts.open(app.bundle_id, name: app.name) }
+                        Button("Unmount from Finder") { tools.mounts.unmount(app.bundle_id) }
+                    } else {
+                        Button("Open in Finder") { tools.mounts.open(app.bundle_id, name: app.name) }
                     }
                     Button("Download Container") { Task { await tools.downloadContainer(app) } }
                     Divider()
@@ -72,6 +84,7 @@ struct AppsTab: View {
         .sheet(item: $launchWithOptions) { app in
             LaunchOptionsSheet(app: app, options: tools.launchOptions(for: app)) { options in
                 tools.saveLaunchOptions(options, for: app)
+                if options.console { showTab(.console) }
                 Task { await tools.launch(app, options: options) }
             }
         }
@@ -122,6 +135,8 @@ struct LaunchOptionsSheet: View {
                 .frame(height: 90)
                 .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.quaternary))
             Toggle("Quit the app first if it is running", isOn: $options.killExisting).toggleStyle(.checkbox)
+            Toggle("Show its output (stdout and stderr) in the Console tab", isOn: $options.console)
+                .toggleStyle(.checkbox)
             if let error { Text(error).font(.caption).foregroundStyle(.red) }
             HStack {
                 Button("Clear") { options = LaunchOptions() }

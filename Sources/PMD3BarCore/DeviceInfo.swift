@@ -120,11 +120,23 @@ public struct LaunchOptions: Codable, Sendable, Equatable {
     /// One `KEY=value` per line.
     public var environment: String
     public var killExisting: Bool
+    /// Stream the app's stdout and stderr to the Console tab until it exits.
+    public var console: Bool
 
-    public init(arguments: String = "", environment: String = "", killExisting: Bool = true) {
+    public init(arguments: String = "", environment: String = "", killExisting: Bool = true, console: Bool = false) {
         self.arguments = arguments
         self.environment = environment
         self.killExisting = killExisting
+        self.console = console
+    }
+
+    /// Options saved before a field existed decode with its default.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        arguments = try c.decodeIfPresent(String.self, forKey: .arguments) ?? ""
+        environment = try c.decodeIfPresent(String.self, forKey: .environment) ?? ""
+        killExisting = try c.decodeIfPresent(Bool.self, forKey: .killExisting) ?? true
+        console = try c.decodeIfPresent(Bool.self, forKey: .console) ?? false
     }
 
     public enum ParseError: Error, Equatable, LocalizedError {
@@ -185,17 +197,27 @@ public struct LaunchOptions: Codable, Sendable, Equatable {
     /// so app arguments that start with `-` are never read as pymobiledevice3 options.
     public func command(bundleID: String) throws -> [String] {
         var args = ["developer", "core-device", "launch-application"]
-        for e in try parsedEnvironment() { args += ["--env", e] }
+        var env = try parsedEnvironment()
+        if console {
+            // As Xcode does: stdout unbuffered (it is a socket, not a terminal) and os_log/Logger
+            // messages mirrored to stderr. Variables the user set win.
+            let names = Set(env.map { String($0.prefix { $0 != "=" }) })
+            for (name, value) in Self.consoleEnvironment where !names.contains(name) { env.append("\(name)=\(value)") }
+        }
+        for e in env { args += ["--env", e] }
         args.append(killExisting ? "--kill-existing" : "--no-kill-existing")
+        if console { args.append("--console") }
         args.append("--")
         args.append(bundleID)
         args += try parsedArguments()
         return args
     }
 
+    public static let consoleEnvironment = [("NSUnbufferedIO", "YES"), ("OS_ACTIVITY_DT_MODE", "YES")]
+
     public var isEmpty: Bool {
         arguments.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && environment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && killExisting
+            && environment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && killExisting && !console
     }
 }
 

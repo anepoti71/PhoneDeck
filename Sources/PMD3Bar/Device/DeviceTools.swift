@@ -26,6 +26,9 @@ final class DeviceTools {
     @ObservationIgnored private(set) lazy var conditions = ConditionsTool(udid: udid) { [weak self] in self?.reportFromTool($0, $1, $2) }
     @ObservationIgnored private(set) lazy var processes = ProcessesTool(udid: udid) { [weak self] in self?.reportFromTool($0, $1, $2) }
     @ObservationIgnored private(set) lazy var crashes = CrashesTool(udid: udid) { [weak self] in self?.reportFromTool($0, $1, $2) }
+    @ObservationIgnored private(set) lazy var mounts = ContainerMounts(udid: udid) { [weak self] in self?.reportFromTool($0, $1, $2) }
+    @ObservationIgnored private(set) lazy var console = AppConsoleTool(udid: udid) { [weak self] in self?.reportFromTool($0, $1, $2) }
+    @ObservationIgnored private(set) lazy var capture = NetworkCaptureTool(udid: udid) { [weak self] in self?.reportFromTool($0, $1, $2) }
 
     init(udid: String) {
         self.udid = udid
@@ -227,6 +230,7 @@ final class DeviceTools {
             report(error.localizedDescription, error: true)
             return
         }
+        if options.console { return console.start(args, appName: app.name) }
         report("Launching \(app.name)…", busy: true)
         let r = await PMD3.run(args, udid: udid, timeout: 90)
         report(r.ok ? "\(app.name) launched" : "Launch failed: \(r.errorSummary)", error: !r.ok)
@@ -695,6 +699,9 @@ final class DeviceTools {
     func shutdown(clearLocation: Bool) {
         installReview?.decide(.cancel)
         stopLog()
+        console.stop()
+        capture.stop()
+        mounts.unmountAll()
         conditions.shutdown()
         processes.shutdown()
         let hadLocation = locationProcess != nil

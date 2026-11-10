@@ -3,7 +3,8 @@ import PMD3BarCore
 
 enum ToolTab: String, CaseIterable, Identifiable {
     case apps = "Apps", files = "Files", location = "Location", conditions = "Conditions",
-         processes = "Processes", crashes = "Crashes", log = "Log", info = "Info"
+         processes = "Processes", crashes = "Crashes", log = "Log", console = "Console", network = "Network",
+         info = "Info"
     var id: String { rawValue }
     var icon: String {
         switch self {
@@ -14,11 +15,13 @@ enum ToolTab: String, CaseIterable, Identifiable {
         case .processes: return "cpu"
         case .crashes: return "exclamationmark.triangle"
         case .log: return "text.alignleft"
+        case .console: return "terminal"
+        case .network: return "network"
         case .info: return "info.circle"
         }
     }
     var isDeveloper: Bool { ToolTab.developerTabs.contains(self) }
-    static let developerTabs: [ToolTab] = [.conditions, .processes, .crashes, .log]
+    static let developerTabs: [ToolTab] = [.conditions, .processes, .crashes, .log, .console, .network]
 }
 
 /// First level of the tools menu: developer tools are grouped under one entry.
@@ -78,30 +81,47 @@ struct ToolsPanel: View {
             .labelsHidden()
             .padding(.horizontal, 10).padding(.top, 10)
             if tab.isDeveloper {
-                Picker("", selection: developerTab) {
-                    ForEach(ToolTab.developerTabs) { t in
-                        Text(t.rawValue).tag(t)
-                    }
+                // Names when the panel is wide enough, icons (with the name as tooltip) otherwise.
+                ViewThatFits(in: .horizontal) {
+                    developerPicker(icons: false)
+                    developerPicker(icons: true)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.small)
                 .padding(.horizontal, 10).padding(.vertical, 8)
             } else {
                 Text(tab.rawValue).font(.headline).padding(.vertical, 6)
             }
             Divider()
             switch tab {
-            case .apps: AppsTab(tools: tools) { tab = .files }
+            case .apps: AppsTab(tools: tools) { tab = $0 }
             case .files: FilesTab(tools: tools)
             case .location: LocationTab(model: model, tools: tools, udid: udid)
             case .conditions: ConditionsTab(model: model, tool: tools.conditions, udid: udid)
             case .processes: ProcessesTab(tool: tools.processes)
             case .crashes: CrashesTab(tool: tools.crashes)
             case .log: LogTab(tools: tools)
+            case .console: ConsoleTab(tool: tools.console)
+            case .network: NetworkTab(tool: tools.capture, deviceName: model.device(udid)?.name ?? "iPhone")
             case .info: InfoTab(model: model, tools: tools, udid: udid)
             }
         }
+    }
+}
+
+extension ToolsPanel {
+    fileprivate func developerPicker(icons: Bool) -> some View {
+        Picker("", selection: developerTab) {
+            ForEach(ToolTab.developerTabs) { t in
+                if icons {
+                    Image(systemName: t.icon).help(t.rawValue).tag(t)
+                } else {
+                    Text(t.rawValue).tag(t)
+                }
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.small)
+        .fixedSize()
     }
 }
 

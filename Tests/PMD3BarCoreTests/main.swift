@@ -65,6 +65,13 @@ suite("RunResult.errorSummary") {
     check(RunResult(status: 0, stdout: Data(), stderr: "").ok, "exit 0 is ok")
     let log = RunResult(status: 1, stdout: Data(), stderr: "line one\nINFO trying again\nERROR Device not found\n")
     check(log.errorSummary == "INFO trying again ERROR Device not found", "last two lines")
+    let pmd3 = RunResult(status: 1, stdout: Data(), stderr: """
+    2026-11-10 14:00:45 Some-Mac.local __main__[97101] ERROR The device refused to open the container of com.x: InstallationLookupFailed.
+    Please report it at https://github.com/doronz88/pymobiledevice3/issues, with the output of the same command run with -v (`pymobiledevice3 -v ...`), so support for it can be added.
+    2026-11-10 14:00:45 Some-Mac.local __main__[97101] INFO Run again with -v for the full traceback (include it when reporting an issue)
+    """)
+    check(pmd3.errorSummary == "The device refused to open the container of com.x: InstallationLookupFailed.",
+          "pymobiledevice3 log line: message only, hints dropped")
 }
 
 suite("Versions.isVersion(_:newerThan:)") {
@@ -309,6 +316,55 @@ suite("FilesScope") {
     check(docs.appFlags == ["--documents"] && FilesScope.app(bundleID: "x", documentsOnly: false).appFlags.isEmpty,
           "documents flag")
     check(docs.bundleID == "com.acme" && media.bundleID == nil, "bundle id")
+}
+
+suite("LaunchOptions.console") {
+    let o = LaunchOptions(console: true)
+    check((try? o.command(bundleID: "a")) == ["developer", "core-device", "launch-application",
+                                              "--env", "NSUnbufferedIO=YES", "--env", "OS_ACTIVITY_DT_MODE=YES",
+                                              "--kill-existing", "--console", "--", "a"],
+          "--console before --, unbuffered stdout and os_log mirrored")
+    let mine = LaunchOptions(environment: "OS_ACTIVITY_DT_MODE=NO", console: true)
+    check((try? mine.command(bundleID: "a"))?.filter { $0.contains("=") } == ["OS_ACTIVITY_DT_MODE=NO", "NSUnbufferedIO=YES"],
+          "user's variables win")
+    check((try? LaunchOptions().command(bundleID: "a"))?.contains("--env") == false, "no console, no extra variables")
+    check(!o.isEmpty, "console makes options non-default")
+    let old = try? JSONDecoder().decode(LaunchOptions.self, from: json(#"{"arguments":"-x","environment":"","killExisting":false}"#))
+    check(old == LaunchOptions(arguments: "-x", killExisting: false), "options saved before console decode")
+}
+
+suite("ConsoleBuffer") {
+    var b = ConsoleBuffer(limit: 3)
+    b.append(Data("one\ntw".utf8))
+    check(b.lines.map(\.text) == ["one"], "partial line held")
+    b.append(Data("o\r\nthree\n".utf8))
+    check(b.lines.map(\.text) == ["one", "two", "three"], "joined across chunks, CRLF trimmed")
+    let euro = Array("€\n".utf8)  // a 3-byte character split between two chunks
+    b.append(Data(euro[0..<1]))
+    b.append(Data(euro[1...]))
+    check(b.lines.map(\.text) == ["two", "three", "€"], "UTF-8 split across chunks, oldest dropped at limit")
+    check(b.lines.map(\.id) == [1, 2, 3], "ids keep increasing")
+    b.append(Data("tail".utf8))
+    b.finish()
+    check(b.lines.last?.text == "tail", "tail kept at end of stream")
+    b.removeAll()
+    check(b.lines.isEmpty && b.text.isEmpty, "cleared")
+}
+
+suite("CaptureStats / WebDAVOutput") {
+    let out = """
+    {"seconds": 0.0, "packets": 0, "bytes": 0, "processes": [], "interfaces": []}
+    {"seconds": 6.1, "packets": 90, "bytes": 23184, "processes": [{"name": "trustd (2907)", "packets": 22, "bytes": 1742}], "interfaces": [{"name": "en0", "packets": 90, "bytes": 23184}]}
+    {"seconds": 6.3, "packets": 9
+    """
+    let s = CaptureStats.last(in: out)
+    check(s?.packets == 90 && s?.processes.first?.name == "trustd (2907)" && s?.interfaces.first?.bytes == 23184,
+          "last complete line wins over a truncated one")
+    check(CaptureStats.last(in: "") == nil, "nothing yet")
+    let w = "WebDAV server serving '/' at http://127.0.0.1:49944/\nMounted; revealed /var/folders/x/T/pmd-U-com.a-vdub\nPress Ctrl-C to stop.\n"
+    check(WebDAVOutput.mountPath(in: w) == "/var/folders/x/T/pmd-U-com.a-vdub", "mount path")
+    check(WebDAVOutput.mountPath(in: "WebDAV server serving") == nil, "not mounted yet")
+    check(WebDAVOutput.mountUnavailable(in: "Automatic mount is unavailable on this host"), "mount unavailable")
 }
 
 print("\n\(passed) controlli superati, \(failures.count) falliti")

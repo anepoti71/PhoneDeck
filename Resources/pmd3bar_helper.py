@@ -13,6 +13,9 @@ Commands (device chosen with PYMOBILEDEVICE3_UDID, USB preferred over Wi-Fi):
                 vended only for development-signed apps: for the others it falls back to the
                 Documents folder (documents = true), which is vended when the app shares files
   info          JSON object with device identity, storage and battery
+  pcap OUT [--process NAME|PID] [--interface IFACE]
+                captures network traffic into OUT (pcapng) until SIGTERM; prints a JSON summary line
+                {seconds, packets, bytes, processes, interfaces} every half second instead of each packet
   apps          JSON list of {bundle_id, name, version} of user apps (only these fields: the full
                 install metadata can carry app secrets and is never printed)
   crash-ls PATH JSON list of {name, dir, size, mtime} of the crash reports under PATH
@@ -26,7 +29,9 @@ import asyncio
 import json
 import os
 import posixpath
+import signal
 import sys
+import time
 
 from pymobiledevice3 import usbmux
 from pymobiledevice3.lockdown import create_using_usbmux
@@ -180,6 +185,61 @@ async def device_info() -> dict:
         await lockdown.close()
 
 
+async def pcap_capture(out_path: str, process: str | None, interface: str | None) -> dict:
+    from pymobiledevice3.services.pcapd import PcapdService
+
+    lockdown = await _lockdown()
+    # SIGTERM (Stop in the app) ends the capture cleanly: the file is flushed and closed.
+    task = asyncio.current_task()
+    asyncio.get_running_loop().add_signal_handler(signal.SIGTERM, task.cancel)
+    started = time.monotonic()
+    totals = {"packets": 0, "bytes": 0}
+    by_process: dict[str, list[int]] = {}
+    by_interface: dict[str, list[int]] = {}
+
+    def summary() -> dict:
+        def top(d: dict[str, list[int]], n: int) -> list[dict]:
+            items = sorted(d.items(), key=lambda kv: kv[1][1], reverse=True)[:n]
+            return [{"name": k, "packets": v[0], "bytes": v[1]} for k, v in items]
+        return {"seconds": round(time.monotonic() - started, 1), **totals,
+                "processes": top(by_process, 40), "interfaces": top(by_interface, 10)}
+
+    def emit() -> None:
+        print(json.dumps(summary()), flush=True)
+
+    out = open(out_path, "wb")
+    try:
+        async with PcapdService(lockdown=lockdown) as service:
+            async def counted():
+                last = 0.0
+                async for packet in service.watch(process=process, interface_name=interface):
+                    size = len(packet.data)
+                    totals["packets"] += 1
+                    totals["bytes"] += size
+                    comm = packet.comm.strip() or "unknown"
+                    # pid 0 is the kernel, 0xFFFFFFFF (-1) means pcapd could not attribute the packet.
+                    name = f"{comm} ({packet.pid})" if 0 < packet.pid < 0xFFFFFFFF else comm
+                    for d, key in ((by_process, name), (by_interface, f"{packet.interface_name}{packet.unit}")):
+                        entry = d.setdefault(key, [0, 0])
+                        entry[0] += 1
+                        entry[1] += size
+                    yield packet
+                    now = time.monotonic()
+                    if now - last >= 0.5:
+                        last = now
+                        out.flush()  # the file stays readable while the capture runs
+                        emit()
+
+            emit()
+            await service.write_to_pcap(out, counted())
+    except asyncio.CancelledError:
+        pass
+    finally:
+        out.close()
+        await lockdown.close()
+    return summary()
+
+
 async def crash_rm(path: str) -> list[str]:
     from pymobiledevice3.services.afc import AfcService
     from pymobiledevice3.services.crash_reports import CrashReportsManager
@@ -247,6 +307,12 @@ def main() -> int:
         out = asyncio.run(afc_ls(args[1]))
     elif len(args) in (3, 4) and args[0] == "container-ls" and args[3:] in ([], ["--documents"]):
         out = asyncio.run(container_ls(args[1], args[2], documents=len(args) == 4))
+    elif len(args) >= 2 and args[0] == "pcap":
+        opts = dict(zip(args[2::2], args[3::2]))
+        if len(args) % 2 or not set(opts) <= {"--process", "--interface"}:
+            print(__doc__, file=sys.stderr)
+            return 2
+        out = asyncio.run(pcap_capture(args[1], opts.get("--process") or None, opts.get("--interface") or None))
     elif args == ["info"]:
         out = asyncio.run(device_info())
     elif len(args) == 2 and args[0] == "crash-ls":

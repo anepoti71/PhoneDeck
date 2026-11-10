@@ -19,9 +19,11 @@ import importlib.resources
 import inspect
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
@@ -70,7 +72,8 @@ CLI = [
     (["mounter", "list"], ["--udid"]),
     (["mounter", "auto-mount"], ["--udid"]),
     (["developer", "core-device", "display", "serve-web"], ["--http-port"]),
-    (["developer", "core-device", "launch-application"], ["--env", "--kill-existing", "--no-kill-existing"]),
+    (["developer", "core-device", "launch-application"], ["--env", "--kill-existing", "--no-kill-existing", "--console"]),
+    (["apps", "webdav"], ["--mount", "--documents"]),
     (["developer", "dvt", "simulate-location", "set"], []),
     (["developer", "dvt", "simulate-location", "clear"], []),
     (["syslog", "live"], ["--format", "--no-debug", "--no-info", "--process-name", "--match-insensitive"]),
@@ -106,6 +109,8 @@ APIS = [
     ("pymobiledevice3.exceptions", "AppNotInstalledError", []),
     ("pymobiledevice3.services.diagnostics", "DiagnosticsService", ["get_battery", "__aenter__"]),
     ("pymobiledevice3.lockdown", "LockdownClient", ["get_value"]),
+    ("pymobiledevice3.services.pcapd", "PcapdService", ["watch", "write_to_pcap", "__aenter__"]),
+    ("pymobiledevice3.services.webdav_mount", "webdav_mount_supported", []),
 ]
 
 
@@ -146,6 +151,12 @@ def static_checks() -> None:
     except Exception as e:  # noqa: BLE001
         record(False, "HouseArrestService.create(bundle_id, documents_only=…)", str(e))
 
+    try:
+        from pymobiledevice3.services.webdav_mount import webdav_mount_supported
+        record(webdav_mount_supported(), "mount_webdav disponibile (Open in Finder)", "mount_webdav non trovato")
+    except Exception as e:  # noqa: BLE001
+        record(False, "mount_webdav disponibile (Open in Finder)", str(e))
+
     print("Viewer e testi attesi")
     try:
         viewer = importlib.resources.files("pymobiledevice3.resources") / "serve_web"
@@ -170,6 +181,10 @@ def static_checks() -> None:
     except Exception as e:  # noqa: BLE001
         record(False, "risorse del viewer", str(e))
     root = Path(importlib.import_module("pymobiledevice3").__file__).parent
+    webdav_src = (root / "services" / "webdav.py").read_text(errors="ignore")
+    record("Mounted; revealed " in webdav_src and "Automatic mount is unavailable" in webdav_src,
+           "testi attesi da apps webdav --mount",
+           "cambiati: aggiorna WebDAVOutput (LiveOutput.swift)")
     found = any("Press Ctrl+C" in p.read_text(errors="ignore") for p in root.rglob("*.py"))
     record(found, "testo \"Ctrl+C\" atteso da simulate-location set",
            "non trovato: DeviceTools.setLocation non capirà quando la posizione è attiva")
@@ -291,6 +306,24 @@ def device_checks(helper_path: str, udid: str | None, location: bool) -> None:
                "campi mancanti")
     except Exception as e:  # noqa: BLE001
         record(False, "helper info", str(e))
+
+    pcap_file = Path(tempfile.mkdtemp()) / "check.pcapng"
+    p = subprocess.Popen([PY, "-I", helper_path, "pcap", str(pcap_file)], stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, env=env(udid))
+    time.sleep(4)
+    p.terminate()  # SIGTERM: the helper closes the file and exits 0
+    try:
+        out, err = p.communicate(timeout=10)
+        lines = [json.loads(l) for l in out.decode().splitlines() if l.strip()]
+        header_ok = pcap_file.read_bytes()[:4] == b"\x0a\x0d\x0d\x0a"
+        record(p.returncode == 0 and header_ok and bool(lines) and "packets" in lines[-1],
+               f"helper pcap ({lines[-1]['packets'] if lines else 0} pacchetti in 4 s)",
+               last_line(err.decode()) or "file pcapng o riepilogo mancanti")
+    except Exception as e:  # noqa: BLE001
+        p.kill()
+        record(False, "helper pcap", str(e))
+    finally:
+        shutil.rmtree(pcap_file.parent, ignore_errors=True)
 
     p = subprocess.Popen([PY, "-I", "-m", "pymobiledevice3", "syslog", "live", "--format", "json", "--no-debug"],
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env(udid))

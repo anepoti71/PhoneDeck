@@ -14,6 +14,12 @@ struct FilesTab: View {
                     .disabled(!tools.canGoUp).help("Parent folder")
                 Text(tools.filesPath).font(.callout.monospaced()).lineLimit(1).truncationMode(.head)
                 Spacer()
+                if let id = tools.filesScope.bundleID {
+                    Button { tools.mounts.open(id, name: tools.filesScopeName) } label: {
+                        Image(systemName: tools.mounts.isMounted(id) ? "externaldrive.connected.to.line.below" : "macwindow")
+                    }
+                    .help("Open the container in Finder, to work on its files directly")
+                }
                 Button { pickUpload() } label: { Image(systemName: "square.and.arrow.up") }.help("Upload here")
                 Button { Task { await tools.refreshFiles() } } label: { Image(systemName: "arrow.clockwise") }.help("Refresh")
             }
