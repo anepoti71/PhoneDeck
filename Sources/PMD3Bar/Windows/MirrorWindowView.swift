@@ -49,6 +49,10 @@ struct MirrorWindowView: View {
             }
             .inspectorColumnWidth(min: 300, ideal: MirrorWindows.toolsWidth, max: 520)
         }
+        .sheet(item: Binding(get: { tools.installReview },
+                             set: { if $0 == nil { tools.installReview?.decide(.cancel) } })) { review in
+            InstallReviewSheet(review: review, tools: tools)
+        }
         .toolbar { toolbar }
         .navigationTitle(device?.name ?? "iPhone")
         .navigationSubtitle(bare ? "" : subtitle)

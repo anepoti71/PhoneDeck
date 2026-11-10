@@ -33,6 +33,11 @@ To install, update and troubleshoot, see the **[RUNBOOK](RUNBOOK.md)**.
 - Screen recording **with the iPhone's audio** and screenshots, saved to `~/Downloads`.
 - **Tools** panel (icon on the right of the window toolbar):
   - **Apps**: installed apps with icons, `.ipa` install, launch, uninstall.
+    Before installing, the `.ipa` is checked against the iPhone (signature, provisioning profile,
+    UDID, bundle ID, certificate, entitlements). If the iPhone would refuse it, the window says why
+    and offers to **resign** it with a profile and certificate on this Mac (saved to `~/Downloads`).
+    When none fits, it lists what to create on the developer portal for that app: certificate,
+    device, App Groups, App ID with its capabilities, extensions, profile.
   - **Files**: the iPhone's Media folder (photos in `DCIM`), with download, upload and delete.
   - **Location**: simulated GPS location, picked on a map. The map starts from the Mac's location
     or from the last location simulated on that iPhone. Closing the window restores the real one.
@@ -110,26 +115,28 @@ Sources/PMD3BarCore/        pure logic, no UI: tested by `make test`
   RunResult.swift           command result and readable error message
   Versions.swift            version comparison (update notice)
   ViewerLayout.swift        viewer geometry and width of the "iPhone only" window
+  Signing.swift             .ipa checks, provisioning profiles, resign plans, portal requirements
   DeviceDates.swift         dates written by the helper (crash reports)
 Sources/PMD3Bar/
   App/                      startup, menu bar menu, state, settings, notifications, menu bar icon
-  Device/                   running pymobiledevice3, mirroring sessions, iPhone tools
+  Device/                   running pymobiledevice3, mirroring sessions, iPhone tools, .ipa resigning
   Viewer/WebView.swift      viewer WKWebView: layout, recording with audio, downloads
   Windows/                  per-iPhone window, grid, window sizing
   Tools/                    Tools panel, one tab per file
 Tests/PMD3BarCoreTests/     tests for the pure logic (`make test`)
-Resources/                  Info.plist, pmd3bar_helper.py, icons
-scripts/                    fetch-python.sh, build-app.sh, check.py, make-icon.py
+Resources/                  Info.plist, entitlements, pmd3bar_helper.py, icons
+scripts/                    fetch-python.sh, build-app.sh, release.sh, check.py, make-icon.py
 ```
 
 | File | Contents |
 |---|---|
 | `Resources/pmd3bar_helper.py` | Extra Python functions (robust device list, files, apps, icons, crashes) |
 | `scripts/fetch-python.sh` | Downloads CPython (sha256 verified), installs pymobiledevice3 into `build/python.new` and puts it in use only if it passes `check.py` |
-| `scripts/build-app.sh` | Builds, creates `build/PMD3Bar.app`, build number, ad-hoc signature |
+| `scripts/build-app.sh` | Builds, creates `build/PMD3Bar.app`, build number, ad-hoc signature (Developer ID with `SIGN_IDENTITY`) |
+| `scripts/release.sh` | Developer ID signature with hardened runtime, notarization, stapling, zip (`make release`) |
 | `scripts/check.py` | Checks that pymobiledevice3 offers everything the app uses (`make check`) |
 | `scripts/make-icon.py` | Cuts out the artwork and generates every icon size (`make icon`) |
-| `Makefile` | `dev`, `python`, `python-rollback`, `app`, `run`, `install`, `test`, `check`, `check-static`, `icon`, `clean` |
+| `Makefile` | `dev`, `python`, `python-rollback`, `app`, `release`, `run`, `install`, `test`, `check`, `check-static`, `icon`, `clean` |
 
 ## Known limitations
 
@@ -140,8 +147,11 @@ scripts/                    fetch-python.sh, build-app.sh, check.py, make-icon.p
 - The iPhone's **real** location can't be read from the Mac: the developer services only allow
   setting or clearing the simulated one, and coordinates are redacted in `locationd` logs. That's
   why the map uses the Mac's location, which is close to the connected iPhone.
-- The signature is ad-hoc: the app is fine on this Mac. Giving it to others needs a Developer ID
-  signature and notarization.
+- `make app` / `make install` sign ad-hoc: fine on this Mac. To give the app to others use
+  `make release` (Developer ID + notarization, see the [RUNBOOK](RUNBOOK.md#11-releasing-to-other-macs)).
+  The app doesn't update itself: the repository is private, so there is no public release feed.
+- Resigning an `.ipa` signs the app only: extensions need their own profiles and are left out with
+  an explicit (non-wildcard) profile, and capabilities the profile doesn't grant are dropped.
 - The app depends on pymobiledevice3 commands and internal functions: update it following the
   [RUNBOOK](RUNBOOK.md#4-updating-pymobiledevice3).
 

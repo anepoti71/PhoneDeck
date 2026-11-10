@@ -19,6 +19,7 @@ cd path/to/PMD3Bar   # the cloned repository
 - [8. Common problems](#8-common-problems)
 - [9. Rules to follow](#9-rules-to-follow)
 - [10. Changing the icon](#10-changing-the-icon)
+- [11. Releasing to other Macs](#11-releasing-to-other-macs)
 
 ---
 
@@ -55,6 +56,7 @@ and then only to update pymobiledevice3.
 | `make dev` | Runs from source with `swift run`, using the conda env's Python |
 | `make check` | Checks the bundled pymobiledevice3 (see [4.3](#43-checking-after-the-update)) |
 | `open build/PMD3Bar.app --args --open <UDID>` | Starts and immediately opens that iPhone's window |
+| `build/PMD3Bar.app/Contents/MacOS/PMD3Bar --ipa-check <file.ipa> <UDID>` | Checks an `.ipa` for that iPhone without the UI (see [7](#7-logs-and-diagnostics)) |
 
 To find the iPhones' UDIDs:
 ```bash
@@ -253,6 +255,13 @@ If you change Python's minor version (for example from 3.12 to 3.13), also updat
   pgrep -fl 'PMD3Bar|pymobiledevice3'
   ```
 - **Who holds a port**: `lsof -nP -iTCP:8080 -sTCP:LISTEN`
+- **Why an `.ipa` won't install**: the same check the app runs before installing, from the terminal.
+  It prints the problems, the profiles on this Mac that could resign it (and why the others can't),
+  and what to create on the developer portal. `--profile <file>` adds a profile that isn't
+  installed; `--resign <out.ipa>` resigns it with the first plan.
+  ```bash
+  build/PMD3Bar.app/Contents/MacOS/PMD3Bar --ipa-check ~/Downloads/App.ipa <UDID>
+  ```
 
 ## 8. Common problems
 
@@ -278,6 +287,8 @@ If you change Python's minor version (for example from 3.12 to 3.13), also updat
 | Generic icon only in **notifications** | Notification Center stores the icon **per bundle ID** the first time it sees the app, and never updates it (its database is protected: restarting processes or changing version doesn't clear it) | Only fix: change `CFBundleIdentifier` in `Resources/Info.plist`, migrating settings as `migrateLegacyDefaults()` in `PMD3BarApp.swift` does. Done once already (`local.experiments.PMD3Bar` → `local.pmd3bar.PMD3Bar`). To avoid it: change the icon *before* the first notification |
 | The Location map doesn't show where the iPhone is | The iPhone's real location can't be read (see README, Known limitations) | The map starts from the Mac ("This Mac") or from the last simulated location; the ◎ button centers on the Mac |
 | "Mac location unavailable" | Location permission denied to PMD3Bar | System Settings ▸ Privacy & Security ▸ Location Services ▸ PMD3Bar |
+| "The iPhone would refuse …" when installing an `.ipa` | Ad-hoc or unsigned app, iPhone not in the profile, expired profile, profile for another App ID, or capabilities the profile doesn't grant | Follow the window: **Resign and Install** with a profile on this Mac, or create what it lists on the developer portal and add the profile with **Choose Profile…** (it is copied to `~/Library/MobileDevice/Provisioning Profiles`) |
+| Resigned app installs but App Groups, push or iCloud don't work | The profile used belongs to another App ID and doesn't grant them (the window warns) | Create an explicit App ID for the app's bundle ID with those capabilities and a profile for it |
 | App icons missing | Empty cache or iPhone unreachable while loading | ↻ button in the Apps panel; cache in `~/Library/Caches/PMD3Bar/icons` (safe to delete) |
 
 ## 9. Rules to follow
@@ -317,3 +328,29 @@ with a light shadow). If the background isn't uniform, make it transparent first
 The **menu bar** icon is different: it's a monochrome template drawn in code
 (`Sources/PMD3Bar/App/MenuBarIcon.swift`), because macOS tints it by itself for light and dark
 mode. It has three variants: normal, mirroring active (dot) and no iPhone (dimmed).
+
+## 11. Releasing to other Macs
+
+`make install` signs ad-hoc, which only this Mac trusts. For other Macs the app needs a Developer ID
+signature with hardened runtime and Apple's notarization:
+
+1. Once: a **Developer ID Application** certificate in the keychain (developer.apple.com ▸
+   Certificates), and notarytool credentials with an app-specific password (appleid.apple.com ▸
+   Sign-In and Security ▸ App-Specific Passwords):
+   ```bash
+   xcrun notarytool store-credentials PMD3Bar --apple-id <apple-id> --team-id <team-id>
+   ```
+2. Every release (bump `CFBundleShortVersionString` in `Resources/Info.plist` first):
+   ```bash
+   make release
+   ```
+   It builds with `SIGN_IDENTITY` set (`scripts/build-app.sh`), checks the signature, submits the
+   zip to the notary service and waits, staples the ticket, and leaves
+   `build/PMD3Bar-<version>.zip`, ready to send. If Apple rejects it, the script prints Apple's log.
+3. `NOTARIZE=0 make release` signs without submitting, to test the hardened-runtime build.
+
+Entitlements: `Resources/PMD3Bar.entitlements` (the app: Mac location for the map) and
+`Resources/python.entitlements` (the bundled CPython: memory for ctypes/cffi callbacks). If a new
+pymobiledevice3 dependency fails only in the release build, check this first.
+
+Remember the GPL obligations in [9](#9-rules-to-follow) before giving the app to anyone.

@@ -6,6 +6,9 @@ struct PMD3BarApp: App {
     @State private var model: AppModel
 
     init() {
+        if let i = CommandLine.arguments.firstIndex(of: "--ipa-check") {
+            IPACheckCLI.main(Array(CommandLine.arguments[(i + 1)...]))
+        }
         Self.migrateLegacyDefaults()
         let model = AppModel()
         _model = State(initialValue: model)

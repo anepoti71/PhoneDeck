@@ -95,7 +95,119 @@ final class DeviceTools {
         if r.ok { iconsGeneration += 1 }
     }
 
+    // MARK: Install
+
+    /// An .ipa this iPhone would refuse as it is, shown in the window until the user decides.
+    var installReview: InstallReview?
+
+    enum InstallDecision {
+        case resign(ResignPlan)
+        case installAnyway
+        case cancel
+    }
+
+    @MainActor
+    @Observable
+    final class InstallReview: Identifiable {
+        let id = UUID()
+        let ipa: URL
+        let info: IPAInfo
+        let issues: [IPAIssue]
+        var plans: [ResignPlan]
+        /// Profiles on this Mac that can't be used, with the reason ("Name: reason").
+        var rejected: [String]
+        /// What the developer portal must provide for this app and iPhone.
+        let requirements: SigningRequirements
+        var profileError: String?
+        @ObservationIgnored let identities: [SigningIdentity]
+        @ObservationIgnored private var decision: CheckedContinuation<InstallDecision, Never>?
+
+        init(ipa: URL, info: IPAInfo, issues: [IPAIssue], plans: [ResignPlan], rejected: [String],
+             requirements: SigningRequirements, identities: [SigningIdentity],
+             decision: CheckedContinuation<InstallDecision, Never>) {
+            self.ipa = ipa
+            self.info = info
+            self.issues = issues
+            self.plans = plans
+            self.rejected = rejected
+            self.requirements = requirements
+            self.identities = identities
+            self.decision = decision
+        }
+
+        /// Only the first call counts (closing the sheet after a choice cancels nothing).
+        func decide(_ d: InstallDecision) {
+            decision?.resume(returning: d)
+            decision = nil
+        }
+    }
+
+    /// Checks an .ipa against this iPhone first: if it would be refused (ad-hoc signature, iPhone
+    /// not in the profile…) the window explains why and offers to resign it with a profile on this Mac.
     func install(_ url: URL) async {
+        guard url.pathExtension.lowercased() == "ipa" else { return await installFile(url) }
+        let name = url.lastPathComponent
+        report("Checking \(name)…", busy: true)
+        let x: IPASigning.Extracted
+        do { x = try await IPASigning.extract(url) } catch {
+            report("Can't read \(name): \(error.localizedDescription)", error: true)
+            return
+        }
+        defer { x.discard() }
+        let issues = Signing.issues(x.info, udid: udid)
+        if issues.isEmpty { return await installFile(url) }
+
+        PMD3.log("[\(udid.prefix(8))] \(name) would be refused: " + issues.map(\.message).joined(separator: " "))
+        let identities = await IPASigning.identities()
+        let (plans, rejected) = resignOptions(x.info, identities: identities)
+        let requirements = Signing.requirements(for: x.info, udid: udid, identities: identities)
+        banner = nil
+        let decision = await withCheckedContinuation { cont in
+            installReview = InstallReview(ipa: url, info: x.info, issues: issues, plans: plans, rejected: rejected,
+                                          requirements: requirements, identities: identities, decision: cont)
+        }
+        installReview = nil
+        switch decision {
+        case .cancel:
+            return
+        case .installAnyway:
+            await installFile(url)
+        case .resign(let plan):
+            report("Resigning \(name)…", busy: true)
+            let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
+            let out = uniqueURL(downloads.appendingPathComponent(url.deletingPathExtension().lastPathComponent + "-resigned.ipa"))
+            do { try await IPASigning.resign(x, plan: plan, to: out) } catch {
+                report("Resign failed: \(error.localizedDescription)", error: true)
+                return
+            }
+            PMD3.log("[\(udid.prefix(8))] \(name) resigned with \(plan.label) as \(plan.bundleID) -> \(out.path)")
+            await installFile(out)
+        }
+    }
+
+    /// Adds a profile the user picked (copied where Xcode keeps them) and looks for resign plans again.
+    func addProfile(_ url: URL, to review: InstallReview) {
+        do {
+            let added = try IPASigning.addProfile(url)
+            (review.plans, review.rejected) = resignOptions(review.info, identities: review.identities)
+            review.profileError = Signing.rejection(of: added, for: review.info, udid: udid, identities: review.identities)
+                .map { "\(added.name) can't be used: \($0)." }
+        } catch {
+            review.profileError = error.localizedDescription
+        }
+    }
+
+    /// Resign plans from this Mac's profiles, and why the other profiles can't be used.
+    private func resignOptions(_ info: IPAInfo, identities: [SigningIdentity]) -> ([ResignPlan], [String]) {
+        let profiles = IPASigning.installedProfiles()
+        let plans = Signing.plans(for: info, udid: udid, profiles: profiles, identities: identities)
+        let rejected = profiles.compactMap { p in
+            Signing.rejection(of: p, for: info, udid: udid, identities: identities).map { "\(p.name): \($0)" }
+        }
+        return (plans, rejected)
+    }
+
+    private func installFile(_ url: URL) async {
         report("Installing \(url.lastPathComponent)…", busy: true)
         let r = await PMD3.run(["apps", "install", url.path], udid: udid, timeout: 900)
         if r.ok {
@@ -436,6 +548,7 @@ final class DeviceTools {
 
     /// Stops every long-running process (window closed or app quitting).
     func shutdown(clearLocation: Bool) {
+        installReview?.decide(.cancel)
         stopLog()
         conditions.shutdown()
         processes.shutdown()

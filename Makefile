@@ -1,4 +1,4 @@
-.PHONY: dev python python-rollback app run install clean check check-static icon test
+.PHONY: dev python python-rollback app release run install clean check check-static icon test
 
 # Run from source, using $PMD3_PYTHON or ~/miniforge3/envs/pymobiledevice as the Python.
 dev:
@@ -10,14 +10,19 @@ python:
 
 # Put back the runtime that the last `make python` replaced (build/python.prev), and vice versa.
 python-rollback:
-	@test -d build/python.prev || { echo "Nessuna versione precedente in build/python.prev"; exit 1; }
+	@test -d build/python.prev || { echo "No previous version in build/python.prev"; exit 1; }
 	mv build/python build/python.swap && mv build/python.prev build/python && mv build/python.swap build/python.prev
 	@build/python/bin/python3 -I -m pymobiledevice3 version
-	@echo "Ripristinata. Ora 'make install' per aggiornare l'app."
+	@echo "Restored. Now 'make install' to update the app."
 
 # Build build/PMD3Bar.app (needs `make python` once).
 app:
 	./scripts/build-app.sh
+
+# Developer ID signature + notarization, packed as build/PMD3Bar-<version>.zip (see RUNBOOK).
+# NOTARIZE=0 signs only; SIGN_IDENTITY / NOTARY_PROFILE pick the identity and the notarytool credentials.
+release:
+	./scripts/release.sh
 
 run: app
 	open build/PMD3Bar.app
@@ -46,7 +51,7 @@ install: app
 	/bin/rm -rf "$(HOME)/Applications/PMD3Bar.app"
 	cp -a build/PMD3Bar.app "$(HOME)/Applications/PMD3Bar.app"
 	-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$(HOME)/Applications/PMD3Bar.app"
-	@echo "Installata in ~/Applications/PMD3Bar.app"
+	@echo "Installed in ~/Applications/PMD3Bar.app"
 
 clean:
 	/bin/rm -rf build/PMD3Bar.app .build

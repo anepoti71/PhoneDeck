@@ -103,6 +103,148 @@ suite("DeviceDates.parse") {
     check(DeviceDates.parse("ieri") == nil, "garbage")
 }
 
+func profile(_ appID: String, devices: [String] = ["UDID-1"], expires: TimeInterval = 86_400,
+             certs: [Data] = [Data("cert-A".utf8)], extra: [String: Any] = [:]) -> ProvisioningProfile {
+    var ent: [String: Any] = ["application-identifier": "TEAM1." + appID, "get-task-allow": true,
+                              "keychain-access-groups": ["TEAM1.*", "com.apple.token"]]
+    ent.merge(extra) { $1 }
+    return ProvisioningProfile(plist: [
+        "Name": "P " + appID, "UUID": "u-" + appID, "TeamIdentifier": ["TEAM1"],
+        "ExpirationDate": Date(timeIntervalSinceNow: expires), "ProvisionedDevices": devices,
+        "DeveloperCertificates": certs, "Entitlements": ent,
+    ])!
+}
+
+func ipa(_ bundleID: String, signature: IPAInfo.Signature = .signed(team: "TEAM1"),
+         entitlements: [String: Any] = [:], profile: ProvisioningProfile? = nil,
+         signer: String? = nil, extensions: [String] = []) -> IPAInfo {
+    IPAInfo(bundleID: bundleID, name: "App", version: "1.0", signature: signature, entitlements: entitlements,
+            profile: profile, signerSHA1: signer, extensionIDs: extensions)
+}
+
+suite("ProvisioningProfile") {
+    let p = profile("com.acme.app")
+    check(p.teamID == "TEAM1" && p.bundlePattern == "com.acme.app" && !p.isWildcard, "explicit App ID")
+    check(p.covers(bundleID: "com.acme.app") && !p.covers(bundleID: "com.acme.app2"), "covers only its bundle ID")
+    check(p.includes(udid: "udid-1") && !p.includes(udid: "UDID-2"), "devices, case-insensitive")
+    check(p.certificateSHA1s == [Signing.sha1(Data("cert-A".utf8))], "certificate SHA-1")
+    let w = profile("*")
+    check(w.isWildcard && w.covers(bundleID: "anything.at.all"), "wildcard App ID")
+    check(ProvisioningProfile(plist: ["Name": "x"]) == nil, "incomplete plist")
+}
+
+suite("Signing.issues") {
+    let ok = profile("com.acme.app")
+    check(Signing.issues(ipa("com.acme.app", profile: ok), udid: "UDID-1").isEmpty, "valid app installs")
+    check(Signing.issues(ipa("x", signature: .adhoc), udid: "UDID-1") == [.adhoc], "ad-hoc (the WQFiles case)")
+    check(Signing.issues(ipa("x", signature: .unsigned), udid: "UDID-1") == [.unsigned], "unsigned")
+    check(Signing.issues(ipa("com.acme.app"), udid: "UDID-1") == [.noProfile], "signed without profile")
+    check(Signing.issues(ipa("com.acme.app", profile: ok), udid: "UDID-9") == [.deviceNotInProfile],
+          "iPhone not registered")
+    let old = profile("com.acme.app", expires: -60)
+    check(Signing.issues(ipa("com.acme.app", profile: old), udid: "UDID-1") == [.profileExpired(old.expiration)],
+          "expired profile")
+    check(Signing.issues(ipa("com.other", profile: ok), udid: "UDID-1") == [.bundleIDNotCovered(appID: "TEAM1.com.acme.app")],
+          "profile for another App ID")
+    check(Signing.issues(ipa("com.acme.app", profile: ok, signer: "FFFF"), udid: "UDID-1") == [.certificateNotInProfile],
+          "signed with a certificate the profile doesn't list")
+    let groups: [String: Any] = ["com.apple.security.application-groups": ["group.com.acme"]]
+    check(Signing.issues(ipa("com.acme.app", entitlements: groups, profile: ok), udid: "UDID-1")
+          == [.entitlementsNotAllowed(["com.apple.security.application-groups"])], "app group not in profile")
+    let withGroup = profile("com.acme.app", extra: groups)
+    check(Signing.issues(ipa("com.acme.app", entitlements: groups.merging(["get-task-allow": true]) { $1 },
+                             profile: withGroup), udid: "UDID-1").isEmpty, "app group granted")
+    check(Signing.deniedEntitlements(["keychain-access-groups": ["TEAM1.com.acme.app"]],
+                                     allowed: ok.entitlements).isEmpty, "keychain group matches TEAM1.*")
+    check(Signing.deniedEntitlements(["get-task-allow": true], allowed: ["get-task-allow": false])
+          == ["get-task-allow"], "debuggable app with a distribution profile")
+}
+
+suite("Signing.parseIdentities") {
+    let ids = Signing.parseIdentities("""
+      1) B3B000C5E3E9088070697149468EFCAD19F94515 "Developer ID Application: A B (TEAM1)"
+      2) 1a698226cb854173d20ad2a0482080ac525ef8af "Apple Development: A B (XYZ)"
+      3) 1A698226CB854173D20AD2A0482080AC525EF8AF "Apple Development: A B (XYZ)"
+         3 valid identities found
+    """)
+    check(ids == [SigningIdentity(sha1: "1A698226CB854173D20AD2A0482080AC525EF8AF", name: "Apple Development: A B (XYZ)")],
+          "iOS identities only, uppercased, deduplicated")
+}
+
+suite("Signing.plans") {
+    let certA = Data("cert-A".utf8)
+    let me = SigningIdentity(sha1: Signing.sha1(certA), name: "Apple Development: Me")
+    let app = ipa("com.acme.app", signature: .adhoc, extensions: ["com.acme.app.widget"])
+    let exact = profile("com.acme.app", expires: 1000)
+    let wild = profile("*", expires: 5000)
+    let other = profile("com.me.wqfiles", expires: 9000)
+    let plans = Signing.plans(for: app, udid: "UDID-1", profiles: [other, wild, exact], identities: [me])
+    check(plans.map(\.profile.uuid) == [exact.uuid, wild.uuid, other.uuid], "own App ID, wildcard, then another App ID")
+    check(!plans[0].changesBundleID && plans[0].droppedExtensions == ["com.acme.app.widget"], "explicit profile drops extensions")
+    check(plans[1].droppedExtensions.isEmpty, "wildcard keeps extensions")
+    check(plans[2].bundleID == "com.me.wqfiles" && plans[2].changesBundleID, "another App ID changes the bundle ID")
+    check(Signing.plans(for: app, udid: "UDID-9", profiles: [exact, wild], identities: [me]).isEmpty, "iPhone not in any profile")
+    check(Signing.plans(for: app, udid: "UDID-1", profiles: [exact], identities: []).isEmpty, "no identity in the keychain")
+    check(Signing.plans(for: app, udid: "UDID-1", profiles: [profile("com.acme.app", expires: -1)], identities: [me]).isEmpty,
+          "expired profile")
+    check(Signing.plans(for: app, udid: "UDID-1", profiles: [profile("com.acme.app", certs: [Data("cert-B".utf8)])],
+                        identities: [me]).isEmpty, "profile for another certificate")
+    check(Signing.extensionID("com.acme.app.widget", from: "com.acme.app", to: "com.me.x") == "com.me.x.widget",
+          "extension follows the new bundle ID")
+}
+
+suite("Signing.entitlements") {
+    let p = profile("*", extra: ["com.apple.security.application-groups": ["group.com.acme", "group.*"],
+                                 "com.apple.developer.associated-domains": "*"])
+    let e = Signing.entitlements(for: "com.acme.app", profile: p)
+    check(e["application-identifier"] as? String == "TEAM1.com.acme.app", "application-identifier expanded")
+    check(e["keychain-access-groups"] as? [String] == ["TEAM1.com.acme.app", "com.apple.token"], "keychain wildcard expanded")
+    check(e["com.apple.security.application-groups"] as? [String] == ["group.com.acme"], "wildcard group left out")
+    check(e["com.apple.developer.associated-domains"] == nil, "wildcard-only entitlement left out")
+    check(e["get-task-allow"] as? Bool == true, "get-task-allow kept")
+    check(Signing.deniedEntitlements(e, allowed: p.entitlements).isEmpty, "result is allowed by the profile")
+}
+
+suite("Signing.requirements") {
+    let me = SigningIdentity(sha1: "AA", name: "Apple Development: Me")
+    let ent: [String: Any] = ["com.apple.security.application-groups": ["group.com.acme"],
+                              "aps-environment": "development", "get-task-allow": true,
+                              "com.apple.developer.icloud-services": ["CloudKit"],
+                              "com.apple.developer.icloud-container-identifiers": ["iCloud.com.acme"]]
+    let app = ipa("com.acme.app", signature: .adhoc, entitlements: ent, extensions: ["com.acme.app.share"])
+    let r = Signing.requirements(for: app, udid: "UDID-7", identities: [me])
+    check(r.hasIdentity && r.needsExplicitAppID, "identity found, explicit App ID needed")
+    check(r.capabilities == ["Push Notifications", "iCloud", "App Groups"], "capabilities by portal name, once each")
+    check(r.appGroups == ["group.com.acme"], "app groups to create")
+    let text = r.steps.joined(separator: "\n")
+    check(text.contains("UDID-7"), "steps name the iPhone")
+    check(text.contains("explicit App ID com.acme.app with Push Notifications, iCloud, App Groups"), "steps name the App ID")
+    check(text.contains("create group.com.acme"), "steps name the app group")
+    check(text.contains("com.acme.app.share"), "steps name the extensions")
+    let plain = Signing.requirements(for: ipa("com.acme.plain", signature: .adhoc), udid: "U", identities: [])
+    check(!plain.hasIdentity && !plain.needsExplicitAppID, "plain app: wildcard App ID is enough, no identity")
+    check(plain.steps[0].hasPrefix("Certificate: create"), "asks to create the certificate")
+}
+
+suite("Signing.rejection / missingCapabilities") {
+    let me = SigningIdentity(sha1: Signing.sha1(Data("cert-A".utf8)), name: "Apple Development: Me")
+    let app = ipa("com.acme.app", signature: .adhoc,
+                  entitlements: ["com.apple.security.application-groups": ["group.com.acme"]])
+    let exact = profile("com.acme.app")
+    check(Signing.rejection(of: profile("com.acme.app", expires: -1), for: app, udid: "UDID-1", identities: [me]) == "expired",
+          "expired")
+    check(Signing.rejection(of: exact, for: app, udid: "UDID-2", identities: [me]) == "this iPhone is not in it", "device")
+    check(Signing.rejection(of: exact, for: app, udid: "UDID-1", identities: []) == "none of its certificates is in your keychain",
+          "certificate")
+    check(Signing.rejection(of: exact, for: app, udid: "UDID-1", identities: [me]) == nil, "usable")
+    let other = profile("com.me.wqfiles", extra: ["com.apple.security.application-groups": ["group.com.me.wqfiles"]])
+    let plan = Signing.plans(for: app, udid: "UDID-1", profiles: [other], identities: [me])[0]
+    check(Signing.missingCapabilities(app, plan: plan) == ["App Groups"], "another app's group doesn't grant this one")
+    let withGroup = profile("com.acme.app", extra: ["com.apple.security.application-groups": ["group.com.acme"]])
+    let good = Signing.plans(for: app, udid: "UDID-1", profiles: [withGroup], identities: [me])[0]
+    check(Signing.missingCapabilities(app, plan: good).isEmpty, "matching profile grants everything")
+}
+
 print("\n\(passed) controlli superati, \(failures.count) falliti")
 for f in failures { print("  ✗ \(f)") }
 exit(failures.isEmpty ? 0 : 1)

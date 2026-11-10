@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
-# Assembles build/PMD3Bar.app: release Swift binary + Info.plist + embedded Python, ad-hoc signed.
+# Assembles build/PMD3Bar.app: release Swift binary + Info.plist + embedded Python.
+# Signed ad-hoc by default (fine on this Mac). SIGN_IDENTITY="Developer ID Application: …" signs it
+# for distribution instead: hardened runtime, secure timestamp, entitlements (see scripts/release.sh).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="$ROOT/build"
 APP="$BUILD/PMD3Bar.app"
 PYDIR="$BUILD/python"
+IDENTITY="${SIGN_IDENTITY:--}"
 
 if [[ ! -x "$PYDIR/bin/python3" ]]; then
-    echo "Manca build/python: esegui prima 'make python'." >&2
+    echo "build/python is missing: run 'make python' first." >&2
     exit 1
 fi
 
@@ -19,14 +22,14 @@ BIN="$(swift build -c release --arch arm64 --show-bin-path)/PMD3Bar"
 
 # A running copy of this bundle would lose its Python mid-run (ModuleNotFoundError): quit it first.
 if pgrep -f "$APP/Contents/MacOS/PMD3Bar" >/dev/null; then
-    echo "==> Chiudo PMD3Bar in esecuzione"
+    echo "==> Quitting the running PMD3Bar"
     pkill -INT -f "$APP/Contents/MacOS/PMD3Bar" || true
     for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -f "$APP/Contents/MacOS/PMD3Bar" >/dev/null || break; sleep 0.5; done
 fi
 # serve-web started by that copy would keep its port busy: stop its Python processes too.
 pkill -INT -f "$APP/Contents/Resources/python/bin/python3" 2>/dev/null || true
 
-echo "==> Assemblo $APP"
+echo "==> Assembling $APP"
 /bin/rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/PMD3Bar"
@@ -39,19 +42,39 @@ cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 # -a keeps symlinks (python3 -> python3.12) and permissions
 cp -a "$PYDIR" "$APP/Contents/Resources/python"
 
-echo "==> Firma ad-hoc"
-# Sign every Mach-O inside the embedded Python first, then the app itself.
+if [[ "$IDENTITY" == "-" ]]; then
+    echo "==> Signing ad-hoc"
+    SIGN=(codesign --force --sign - --timestamp=none)
+    PY_ENT=()
+    APP_ENT=()
+else
+    echo "==> Signing with $IDENTITY (hardened runtime)"
+    SIGN=(codesign --force --sign "$IDENTITY" --timestamp --options runtime)
+    PY_ENT=(--entitlements "$ROOT/Resources/python.entitlements")
+    APP_ENT=(--entitlements "$ROOT/Resources/PMD3Bar.entitlements")
+fi
+# codesign, without its "replacing existing signature" line for every file (errors still show).
+sign() {
+    local out
+    out="$("${SIGN[@]}" "$@" 2>&1)" || { echo "$out" >&2; return 1; }
+}
+# Sign every Mach-O inside the embedded Python first, then the app itself. Executables (python3)
+# get the Python entitlements; libraries carry none.
 find "$APP/Contents/Resources/python" -type f \( -name '*.so' -o -name '*.dylib' -o -perm -u+x \) -print0 |
     while IFS= read -r -d '' f; do
-        if file -b "$f" | grep -q 'Mach-O'; then
-            codesign --force --sign - --timestamp=none "$f"
+        kind="$(file -b "$f")"
+        [[ "$kind" == *Mach-O* ]] || continue
+        if [[ "$kind" == *executable* ]]; then
+            sign ${PY_ENT[@]+"${PY_ENT[@]}"} "$f"
+        else
+            sign "$f"
         fi
     done
-codesign --force --sign - --timestamp=none "$APP"
-codesign --verify --strict "$APP" && echo "Firma OK"
+sign ${APP_ENT[@]+"${APP_ENT[@]}"} "$APP"
+codesign --verify --strict "$APP" && echo "Signature OK"
 
 # Let Finder, Dock and notifications pick up the current icon instead of a cached one.
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP" 2>/dev/null || true
 
 du -sh "$APP"
-echo "Pronto: $APP"
+echo "Ready: $APP"
