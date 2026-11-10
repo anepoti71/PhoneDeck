@@ -1,0 +1,38 @@
+{
+  "provider": "spec-kit",
+  "description": "Default provider built on the specify CLI.",
+  "dependencies": [
+    {
+      "label": "spec-kit CLI",
+      "command": "specify",
+      "required": true
+    },
+    {
+      "label": "uv/uvx",
+      "command": "uvx",
+      "required": false
+    }
+  ],
+  "actions": {
+    "constitution": {
+      "kind": "assistant-command",
+      "command": "/speckit-constitution"
+    },
+    "new_spec": {
+      "kind": "assistant-command",
+      "command": "/speckit-specify"
+    },
+    "plan": {
+      "kind": "assistant-command",
+      "command": "/speckit-plan"
+    },
+    "tasks": {
+      "kind": "assistant-command",
+      "command": "/speckit-tasks"
+    },
+    "implement": {
+      "kind": "assistant-command",
+      "command": "/speckit-implement"
+    }
+  }
+}

@@ -1,0 +1,135 @@
+{
+  "generated_at": "2026-11-10T17:36:18.792173Z",
+  "repo_root": "/Users/anepoti/workspace/experiments/PMD3Bar",
+  "assessed_path": ".",
+  "summary": {
+    "repo_name": "PMD3Bar",
+    "system_shape": [
+      "agentic-or-ai-assisted-flow"
+    ],
+    "languages": [
+      "python",
+      "swift"
+    ],
+    "component_count": 1,
+    "endpoint_count": 0,
+    "agentic": true,
+    "tests_present": false,
+    "code_file_count": 40,
+    "monorepo": false
+  },
+  "limits": {
+    "component_samples": 12,
+    "entrypoint_samples": 12,
+    "test_samples": 10,
+    "endpoint_samples": 20,
+    "adr_recommendations": 5,
+    "risk_samples": 5,
+    "open_question_samples": 5,
+    "signal_scan_max_files": 200,
+    "signal_scan_max_chars_per_file": 4000,
+    "signal_scan_max_total_chars": 200000,
+    "scan_budget_scope": "per-detector"
+  },
+  "signals": {
+    "languages": [
+      {
+        "language": "python",
+        "file_count": 3
+      },
+      {
+        "language": "swift",
+        "file_count": 37
+      }
+    ],
+    "manifests": [],
+    "components": [
+      "Package.swift"
+    ],
+    "entrypoints": [
+      "Tests/PMD3BarCoreTests/main.swift"
+    ],
+    "tests": {
+      "present": false,
+      "sample_paths": [],
+      "descriptions": []
+    },
+    "docs": [
+      {
+        "path": "README.md",
+        "kind": "doc"
+      }
+    ],
+    "endpoints": [],
+    "data_signals": [],
+    "deployment_signals": [],
+    "agentic": {
+      "present": true,
+      "hint_paths": [
+        "Sources/PMD3Bar/App/Integrations.swift",
+        "Tests/PMD3BarCoreTests/main.swift"
+      ],
+      "openharness_paths": [],
+      "confidence": "medium",
+      "keyword_hit_count": 2,
+      "scan": {
+        "eligible_files": 40,
+        "scanned_files": 40,
+        "truncated": false
+      }
+    },
+    "monorepo_services": [],
+    "git_signals": [
+      "fdb57ac README: group developer features under For developers, drop the GPS line",
+      "458c450 README: drop the former-name line",
+      "bc0e71d Simplify the README; move build details to the RUNBOOK",
+      "f8e328c Rename the app to PhoneDeck",
+      "854f870 README: close the architecture diagram's box around the port list",
+      "0bf8595 Compact menu footer: icon buttons for refresh, log and quit next to the version",
+      "0d78fb3 Open app containers in Finder, stream app console, capture network traffic",
+      "959a6ce Add app container files, Info tab, restart/shut down and launch options",
+      "3e8ea9f Check .ipa files before install, resign them, and add Developer ID release",
+      "0fc28f9 Translate README and RUNBOOK to English, drop personal paths, ignore .specify",
+      "584c3bf Make the iPhone-only window transparent around the device, like the Simulator",
+      "7afac53 Drop the Developer tools header and the notification test button",
+      "0a5d6f1 Translate all app UI, notifications and log messages to English",
+      "0c472e8 Group conditions, processes, crashes and log under a Developer tools submenu",
+      "a1bb7e5 RUNBOOK: backup to the private GitHub repository",
+      "f997b09 Split sources into folders, extract PMD3BarCore with tests (make test)",
+      "ed14b1e Per-iPhone layout mode, recording with audio, tools panel built only when open",
+      "7e3fe57 Add conditions, processes, crashes, multi-iPhone grid, update notice, safe make python",
+      "03b6efe Size the window around the iPhone in device-only mode",
+      "1c4e0d9 Window shows only the iPhone by default; viewer controls and tools on demand",
+      "9a719d4 Hide pymobiledevice3 branding in the viewer; menu shows only its version",
+      "bb3510a Fix generic icon in notifications: new bundle ID, build numbers, queued notifications",
+      "52772ab Location map: start from the Mac's position or the last simulated one",
+      "17bcb68 Add app icon and matching menu bar icon",
+      "7d6fe83 Add make check, DDI auto-mount, notifications, hotkey, login item, app icons",
+      "8896530 Initial PMD3Bar: macOS menu bar app for pymobiledevice3"
+    ]
+  },
+  "artifact_recommendations": {
+    "spec_slug": "001-pmd3bar-bootstrap",
+    "spec_title": "Pmd3Bar bootstrap",
+    "needs_eval_plan": true,
+    "needs_harness_strategy": true,
+    "needs_deployment_strategy": false,
+    "needs_data_pipeline_section": true,
+    "recommended_adrs": [
+      {
+        "title": "Harness boundary, tool permissions, and evaluation policy",
+        "reason": "AI or agentic behavior was detected and needs a bounded runtime contract."
+      }
+    ]
+  },
+  "risks": [
+    "No obvious automated test files were detected; reverse-engineered requirements may be hard to verify.",
+    "Agentic behavior was detected without obvious external interfaces; clarify the user-visible workflow before writing the spec."
+  ],
+  "open_questions": [
+    "Which user-facing workflow or business capability should this bootstrap spec cover first?",
+    "Which parts of the codebase are legacy, experimental, or explicitly out of scope for the first governed spec?",
+    "Which AI or agent behaviors require human approval, bounded tools, or explicit evaluation gates?",
+    "What current evidence exists to validate behavior if automated tests are sparse or missing?"
+  ]
+}

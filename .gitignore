@@ -3,4 +3,6 @@ build/
 .DS_Store
 .swiftpm/
 __pycache__/
-.specify/
+.specify/harness-usage/
+.specify/coordination/
+.claude/settings.local.json

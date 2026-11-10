@@ -1,0 +1,16 @@
+default_install_hook_types: [pre-commit, pre-push]
+repos:
+  - repo: "https://github.com/gitleaks/gitleaks"
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+        name: Detect secrets with gitleaks
+  - repo: local
+    hooks:
+      - id: swift-core-tests
+        name: PMD3BarCore unit tests (make test)
+        entry: make test
+        language: system
+        pass_filenames: false
+        files: '^(Sources|Tests)/.*\.swift$|^Package\.swift$'
+        stages: [pre-push]
