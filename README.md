@@ -20,12 +20,12 @@ Built on [pymobiledevice3](https://github.com/doronz88/pymobiledevice3), which s
 
 - Install an `.ipa` by dropping it on the window. If the iPhone would refuse it, PhoneDeck tells
   you why and can re-sign it for you.
-- Launch, uninstall, and launch with custom arguments, watching the app's output live.
+- Launch and uninstall apps.
 - Browse photos and app files, copy them back and forth, or open an app's files straight in Finder.
 
-### Testing and debugging
+### For developers
 
-- Fake the GPS location by picking a spot on a map.
+- Launch an app with custom arguments and environment, and watch its output live, as in Xcode.
 - Simulate a slow network, a hot device or a slow GPU.
 - Watch processes, crash reports and the system log.
 - Record the iPhone's network traffic for Wireshark.
@@ -61,7 +61,6 @@ For updates, troubleshooting and how the app is built, see the **[RUNBOOK](RUNBO
 ## Good to know
 
 - Over Wi-Fi the iPhone must be awake and on the same network as the Mac.
-- PhoneDeck can't read the iPhone's real location, so the map starts from where your Mac is.
 - Re-signing an `.ipa` covers the app itself, not its extensions.
 - The app doesn't update itself. To share it with other Macs, see
   [Releasing to other Macs](RUNBOOK.md#11-releasing-to-other-macs).
