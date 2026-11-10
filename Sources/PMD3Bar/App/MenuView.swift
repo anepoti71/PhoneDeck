@@ -141,22 +141,33 @@ struct MenuView: View {
         .font(.caption)
     }
 
+    @State private var refreshing = false
+
     private var footer: some View {
         VStack(alignment: .leading, spacing: 6) {
             settings
-            HStack {
-                Button("Refresh") {
-                    Task {
-                        await model.refreshDevices()
-                        await model.refreshMount()
-                    }
-                }
-                Button("Log") { model.openLog() }
+            HStack(spacing: 2) {
+                Text("pymobiledevice3 \(model.pmd3Version)")
+                    .font(.caption2).foregroundStyle(.tertiary)
                 Spacer()
-                Button("Quit") { NSApplication.shared.terminate(nil) }
+                Group {
+                    if refreshing {
+                        ProgressView().controlSize(.mini).frame(width: 22, height: 18)
+                    } else {
+                        FooterButton(icon: "arrow.clockwise", help: "Refresh devices and Developer Disk Image") {
+                            refreshing = true
+                            Task {
+                                await model.refreshDevices()
+                                await model.refreshMount()
+                                refreshing = false
+                            }
+                        }
+                    }
+                    FooterButton(icon: "doc.text.magnifyingglass", help: "Open the log") { model.openLog() }
+                    FooterButton(icon: "power", help: "Quit PMD3Bar") { NSApplication.shared.terminate(nil) }
+                        .keyboardShortcut("q")
+                }
             }
-            Text("pymobiledevice3 \(model.pmd3Version)")
-                .font(.caption2).foregroundStyle(.tertiary)
             if model.updateAvailable, let latest = model.latestPMD3 {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.up.circle.fill").foregroundStyle(.blue)
@@ -267,5 +278,28 @@ struct DeviceRow: View {
                     .disabled(!device.reachable)
             }
         }
+    }
+}
+
+/// Small icon button for the menu footer: borderless, highlighted on hover, name as tooltip.
+private struct FooterButton: View {
+    let icon: String
+    let help: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(hovering ? .primary : .secondary)
+                .frame(width: 22, height: 18)
+                .background(RoundedRectangle(cornerRadius: 4).fill(hovering ? Color.primary.opacity(0.1) : .clear))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(help)
+        .onHover { hovering = $0 }
     }
 }
