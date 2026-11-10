@@ -5,8 +5,11 @@ import PMD3BarCore
 
 struct AppsTab: View {
     let tools: DeviceTools
+    /// Switches the panel to the Files tab (after the app's container was selected there).
+    var showFilesTab: () -> Void = {}
     @State private var search = ""
     @State private var confirmUninstall: DeviceTools.AppInfo?
+    @State private var launchWithOptions: DeviceTools.AppInfo?
 
     private var filtered: [DeviceTools.AppInfo] {
         search.isEmpty ? tools.apps : tools.apps.filter {
@@ -45,6 +48,14 @@ struct AppsTab: View {
                 }
                 .contextMenu {
                     Button("Launch") { Task { await tools.launch(app) } }
+                    Button("Launch with Options…") { launchWithOptions = app }
+                    Divider()
+                    Button("Show Files") {
+                        showFilesTab()
+                        Task { await tools.showFiles(of: app) }
+                    }
+                    Button("Download Container") { Task { await tools.downloadContainer(app) } }
+                    Divider()
                     Button("Copy bundle ID") {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(app.bundle_id, forType: .string)
@@ -54,10 +65,16 @@ struct AppsTab: View {
                 }
             }
             .overlay { if tools.appsLoading && tools.apps.isEmpty { ProgressView() } }
-            Text("Drop an .ipa on the window to install it. Launch needs the Developer Disk Image.")
+            Text("Drop an .ipa on the window to install it. Launch needs the Developer Disk Image. Right-click an app for its files and launch options.")
                 .font(.caption2).foregroundStyle(.secondary).padding(.horizontal, 10).padding(.bottom, 8)
         }
         .task { if tools.apps.isEmpty { await tools.refreshApps() } }
+        .sheet(item: $launchWithOptions) { app in
+            LaunchOptionsSheet(app: app, options: tools.launchOptions(for: app)) { options in
+                tools.saveLaunchOptions(options, for: app)
+                Task { await tools.launch(app, options: options) }
+            }
+        }
         .confirmationDialog("Uninstall \(confirmUninstall?.name ?? "")?", isPresented: .init(
             get: { confirmUninstall != nil }, set: { if !$0 { confirmUninstall = nil } })
         ) {
@@ -75,5 +92,50 @@ struct AppsTab: View {
         panel.allowsMultipleSelection = true
         guard panel.runModal() == .OK else { return }
         Task { for url in panel.urls { await tools.install(url) } }
+    }
+}
+
+/// Arguments and environment for one launch, remembered per app.
+struct LaunchOptionsSheet: View {
+    let app: DeviceTools.AppInfo
+    @State var options: LaunchOptions
+    let launch: (LaunchOptions) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    private var error: String? {
+        do {
+            _ = try options.parsedArguments()
+            _ = try options.parsedEnvironment()
+            return nil
+        } catch { return error.localizedDescription }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Launch \(app.name)").font(.headline)
+            Text("Arguments").font(.caption).foregroundStyle(.secondary)
+            TextField("-FIRDebugEnabled -AppleLanguages \"(it)\"", text: $options.arguments)
+                .textFieldStyle(.roundedBorder).font(.callout.monospaced())
+            Text("Environment, one KEY=value per line").font(.caption).foregroundStyle(.secondary)
+            TextEditor(text: $options.environment)
+                .font(.callout.monospaced())
+                .frame(height: 90)
+                .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.quaternary))
+            Toggle("Quit the app first if it is running", isOn: $options.killExisting).toggleStyle(.checkbox)
+            if let error { Text(error).font(.caption).foregroundStyle(.red) }
+            HStack {
+                Button("Clear") { options = LaunchOptions() }
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Launch") {
+                    launch(options)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(error != nil)
+            }
+        }
+        .padding(16)
+        .frame(width: 380)
     }
 }

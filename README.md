@@ -20,6 +20,7 @@ To install, update and troubleshoot, see the **[RUNBOOK](RUNBOOK.md)**.
   or mirroring stops.
 - **Global shortcut ⌥⌘M** to show or hide the selected iPhone's window.
 - **Launch at login**, toggled from the menu (Settings).
+- **Restart or shut down** an iPhone: right-click it in the menu.
 - **Grid**: all mirrored iPhones side by side in a single window.
 - **Update notice**: flags in the menu (and with a notification) when a new pymobiledevice3
   version is released, with the command to update.
@@ -33,12 +34,16 @@ To install, update and troubleshoot, see the **[RUNBOOK](RUNBOOK.md)**.
 - Screen recording **with the iPhone's audio** and screenshots, saved to `~/Downloads`.
 - **Tools** panel (icon on the right of the window toolbar):
   - **Apps**: installed apps with icons, `.ipa` install, launch, uninstall.
+    **Launch with options** passes arguments and environment variables (remembered per app).
+    Right-click an app to browse its files or **download its container** to `~/Downloads`.
     Before installing, the `.ipa` is checked against the iPhone (signature, provisioning profile,
     UDID, bundle ID, certificate, entitlements). If the iPhone would refuse it, the window says why
     and offers to **resign** it with a profile and certificate on this Mac (saved to `~/Downloads`).
     When none fits, it lists what to create on the developer portal for that app: certificate,
     device, App Groups, App ID with its capabilities, extensions, profile.
-  - **Files**: the iPhone's Media folder (photos in `DCIM`), with download, upload and delete.
+  - **Files**: the iPhone's Media folder (photos in `DCIM`) or an **app's container**, with download,
+    upload and delete. The whole container (Documents, Library, tmp) opens for development-signed
+    apps; for the others only the Documents folder, when the app shares its files.
   - **Location**: simulated GPS location, picked on a map. The map starts from the Mac's location
     or from the last location simulated on that iPhone. Closing the window restores the real one.
   - **Developer**:
@@ -46,6 +51,9 @@ To install, update and troubleshoot, see the **[RUNBOOK](RUNBOOK.md)**.
     - **Processes**: CPU and memory of each process, with the option to kill it.
     - **Crashes**: crash and diagnostic reports, to read, download or delete.
     - **Log**: live system log, with filters and export.
+  - **Info**: model, iOS build, serial number, UDID and the other identifiers (right-click to copy),
+    storage used and free, battery charge, maximum capacity, cycles and temperature. Restart and
+    shut down.
 - Drop an `.ipa` on the window to install it, or other files to copy them to the iPhone.
 
 ## Requirements
@@ -98,7 +106,9 @@ PMD3Bar.app/Contents/
 - **`pmd3bar_helper.py`** does what the pymobiledevice3 command line can't:
   - lists iPhones even when a Wi-Fi connection doesn't answer (`usbmux list` fails entirely
     in that case);
-  - lists folders with file type and size;
+  - lists folders with file type and size, in the Media folder or an app's container (falling back
+    to its Documents folder when the whole container is refused);
+  - reads device identity, storage and battery for the Info tab, keeping only the fields shown;
   - lists apps with name, bundle ID and version only, without the full metadata, which can
     contain app keys;
   - fetches app icons over a single connection and caches them in `~/Library/Caches/PMD3Bar/icons`.
@@ -116,6 +126,7 @@ Sources/PMD3BarCore/        pure logic, no UI: tested by `make test`
   Versions.swift            version comparison (update notice)
   ViewerLayout.swift        viewer geometry and width of the "iPhone only" window
   Signing.swift             .ipa checks, provisioning profiles, resign plans, portal requirements
+  DeviceInfo.swift          Info tab parsing, launch options, Files tab scope (Media or app container)
   DeviceDates.swift         dates written by the helper (crash reports)
 Sources/PMD3Bar/
   App/                      startup, menu bar menu, state, settings, notifications, menu bar icon

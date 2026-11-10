@@ -3,7 +3,7 @@ import PMD3BarCore
 
 enum ToolTab: String, CaseIterable, Identifiable {
     case apps = "Apps", files = "Files", location = "Location", conditions = "Conditions",
-         processes = "Processes", crashes = "Crashes", log = "Log"
+         processes = "Processes", crashes = "Crashes", log = "Log", info = "Info"
     var id: String { rawValue }
     var icon: String {
         switch self {
@@ -14,6 +14,7 @@ enum ToolTab: String, CaseIterable, Identifiable {
         case .processes: return "cpu"
         case .crashes: return "exclamationmark.triangle"
         case .log: return "text.alignleft"
+        case .info: return "info.circle"
         }
     }
     var isDeveloper: Bool { ToolTab.developerTabs.contains(self) }
@@ -22,7 +23,7 @@ enum ToolTab: String, CaseIterable, Identifiable {
 
 /// First level of the tools menu: developer tools are grouped under one entry.
 enum ToolGroup: String, CaseIterable, Identifiable {
-    case apps = "Apps", files = "Files", location = "Location", developer = "Developer"
+    case apps = "Apps", files = "Files", location = "Location", developer = "Developer", info = "Info"
     var id: String { rawValue }
     var icon: String {
         switch self {
@@ -30,6 +31,7 @@ enum ToolGroup: String, CaseIterable, Identifiable {
         case .files: return "folder"
         case .location: return "location"
         case .developer: return "hammer"
+        case .info: return "info.circle"
         }
     }
 }
@@ -47,6 +49,7 @@ struct ToolsPanel: View {
             case .apps: return .apps
             case .files: return .files
             case .location: return .location
+            case .info: return .info
             default: return .developer
             }
         } set: { g in
@@ -54,6 +57,7 @@ struct ToolsPanel: View {
             case .apps: tab = .apps
             case .files: tab = .files
             case .location: tab = .location
+            case .info: tab = .info
             case .developer: tab = lastDeveloperTab.isDeveloper ? lastDeveloperTab : .conditions
             }
         }
@@ -88,13 +92,14 @@ struct ToolsPanel: View {
             }
             Divider()
             switch tab {
-            case .apps: AppsTab(tools: tools)
+            case .apps: AppsTab(tools: tools) { tab = .files }
             case .files: FilesTab(tools: tools)
             case .location: LocationTab(model: model, tools: tools, udid: udid)
             case .conditions: ConditionsTab(model: model, tool: tools.conditions, udid: udid)
             case .processes: ProcessesTab(tool: tools.processes)
             case .crashes: CrashesTab(tool: tools.crashes)
             case .log: LogTab(tools: tools)
+            case .info: InfoTab(model: model, tools: tools, udid: udid)
             }
         }
     }

@@ -32,7 +32,7 @@ struct MirrorWindowView: View {
         .overlay {
             if dropTargeted {
                 RoundedRectangle(cornerRadius: 12).strokeBorder(Color.accentColor, lineWidth: 4)
-                    .overlay(Text("Drop: .ipa to install, other files to \(tools.filesPath)")
+                    .overlay(Text("Drop: .ipa to install, other files to \(tools.filesScopeName) \(tools.filesPath)")
                         .padding(8).background(.regularMaterial, in: Capsule()))
                     .padding(6)
             }

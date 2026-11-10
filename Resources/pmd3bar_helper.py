@@ -8,6 +8,11 @@ entry instead.
 Commands (device chosen with PYMOBILEDEVICE3_UDID, USB preferred over Wi-Fi):
   list          JSON list of {udid, connection, name, version, product_type, error}
   afc-ls PATH   JSON list of {name, dir, size, mtime} under /var/mobile/Media/PATH
+  container-ls BUNDLE_ID PATH [--documents]
+                {documents, entries} for PATH inside an app's container. The whole container is
+                vended only for development-signed apps: for the others it falls back to the
+                Documents folder (documents = true), which is vended when the app shares files
+  info          JSON object with device identity, storage and battery
   apps          JSON list of {bundle_id, name, version} of user apps (only these fields: the full
                 install metadata can carry app secrets and is never printed)
   crash-ls PATH JSON list of {name, dir, size, mtime} of the crash reports under PATH
@@ -27,6 +32,10 @@ from pymobiledevice3 import usbmux
 from pymobiledevice3.lockdown import create_using_usbmux
 
 LOCKDOWN_TIMEOUT = 6
+
+
+class Refused(Exception):
+    """An expected refusal from the iPhone: printed as one line on stderr, without a traceback."""
 
 
 async def describe(device) -> dict:
@@ -101,6 +110,76 @@ async def afc_ls(path: str, crash_reports: bool = False) -> list[dict]:
         await lockdown.close()
 
 
+async def container_ls(bundle_id: str, path: str, documents: bool) -> dict:
+    from pymobiledevice3.exceptions import AppNotInstalledError, PyMobileDevice3Exception
+    from pymobiledevice3.services.house_arrest import DOCUMENTS_ROOT, HouseArrestService
+
+    lockdown = await _lockdown()
+    try:
+        if not documents:
+            try:
+                async with await HouseArrestService.create(lockdown=lockdown, bundle_id=bundle_id) as afc:
+                    return {"documents": False, "entries": await _ls(afc, path)}
+            except AppNotInstalledError:
+                raise
+            except PyMobileDevice3Exception:
+                documents = True  # not development-signed: only its Documents folder may be vended
+                if not path.startswith(DOCUMENTS_ROOT):
+                    path = DOCUMENTS_ROOT
+        try:
+            async with await HouseArrestService.create(lockdown=lockdown, bundle_id=bundle_id,
+                                                       documents_only=True) as afc:
+                return {"documents": True, "entries": await _ls(afc, path)}
+        except AppNotInstalledError:
+            raise
+        except PyMobileDevice3Exception as e:
+            # Not PyMobileDevice3Exception: its message would end with "Please report it at…".
+            raise Refused(
+                f"{bundle_id} doesn't share its files: its container opens only for development-signed apps, "
+                f"its Documents folder only for apps with file sharing enabled") from e
+    finally:
+        await lockdown.close()
+
+
+# Lockdown values shown in the Info tab (the full set also carries keys and certificates).
+INFO_KEYS = ["DeviceName", "ProductType", "ProductVersion", "BuildVersion", "SerialNumber", "UniqueDeviceID",
+             "ModelNumber", "RegionInfo", "HardwareModel", "CPUArchitecture", "WiFiAddress", "BluetoothAddress"]
+DISK_KEYS = ["TotalDiskCapacity", "TotalDataCapacity", "TotalDataAvailable", "AmountDataAvailable"]
+BATTERY_KEYS = ["CurrentCapacity", "IsCharging", "ExternalConnected", "FullyCharged", "CycleCount", "DesignCapacity",
+                "NominalChargeCapacity", "AppleRawMaxCapacity", "Temperature", "Voltage"]
+
+
+def _plain(value):
+    """Only JSON scalars: lockdown can return bytes or dates."""
+    return value if isinstance(value, (str, int, float, bool)) or value is None else str(value)
+
+
+async def device_info() -> dict:
+    from pymobiledevice3.services.diagnostics import DiagnosticsService
+
+    lockdown = await _lockdown()
+    out = {"device": {}, "disk": {}, "battery": {}, "errors": []}
+    try:
+        values = await lockdown.get_value()  # after pairing: all_values may predate the session
+        out["device"] = {k: _plain(values.get(k)) for k in INFO_KEYS if values.get(k) is not None}
+        try:
+            disk = await lockdown.get_value("com.apple.disk_usage") or {}
+            out["disk"] = {k: disk[k] for k in DISK_KEYS if isinstance(disk.get(k), int)}
+        except Exception as e:  # noqa: BLE001 - show what is available
+            out["errors"].append(f"storage: {type(e).__name__}: {e}")
+        try:
+            async with DiagnosticsService(lockdown=lockdown) as diagnostics:
+                battery = await diagnostics.get_battery() or {}
+            # Recent iOS keeps the capacities (design, nominal) one level down, in BatteryData.
+            battery = {**(battery.get("BatteryData") or {}), **battery}
+            out["battery"] = {k: _plain(battery[k]) for k in BATTERY_KEYS if k in battery}
+        except Exception as e:  # noqa: BLE001
+            out["errors"].append(f"battery: {type(e).__name__}: {e}")
+        return out
+    finally:
+        await lockdown.close()
+
+
 async def crash_rm(path: str) -> list[str]:
     from pymobiledevice3.services.afc import AfcService
     from pymobiledevice3.services.crash_reports import CrashReportsManager
@@ -166,6 +245,10 @@ def main() -> int:
         out = asyncio.run(list_devices())
     elif len(args) == 2 and args[0] == "afc-ls":
         out = asyncio.run(afc_ls(args[1]))
+    elif len(args) in (3, 4) and args[0] == "container-ls" and args[3:] in ([], ["--documents"]):
+        out = asyncio.run(container_ls(args[1], args[2], documents=len(args) == 4))
+    elif args == ["info"]:
+        out = asyncio.run(device_info())
     elif len(args) == 2 and args[0] == "crash-ls":
         out = asyncio.run(afc_ls(args[1], crash_reports=True))
     elif len(args) == 2 and args[0] == "crash-rm":
@@ -181,5 +264,15 @@ def main() -> int:
     return 0
 
 
+def run() -> int:
+    try:
+        return main()
+    except Refused as e:
+        # Only the first line of the cause: pymobiledevice3 appends "Please report it at…" to unknown errors.
+        cause = (str(e.__cause__).strip().splitlines() or [type(e.__cause__).__name__])[0] if e.__cause__ else ""
+        print(f"{e} ({cause})" if cause else str(e), file=sys.stderr)
+        return 1
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run())

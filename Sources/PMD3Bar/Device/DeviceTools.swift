@@ -5,7 +5,8 @@ import Observation
 import PMD3BarCore
 
 /// pymobiledevice3 features the web viewer doesn't expose, for one iPhone:
-/// apps (install/launch/uninstall), files (/var/mobile/Media over AFC), simulated location, system log.
+/// apps (install/launch/uninstall), files (/var/mobile/Media and app containers over AFC), simulated location,
+/// system log, device info and power.
 @MainActor
 @Observable
 final class DeviceTools {
@@ -220,10 +221,68 @@ final class DeviceTools {
         }
     }
 
-    func launch(_ app: AppInfo) async {
+    func launch(_ app: AppInfo, options: LaunchOptions = LaunchOptions()) async {
+        let args: [String]
+        do { args = try options.command(bundleID: app.bundle_id) } catch {
+            report(error.localizedDescription, error: true)
+            return
+        }
         report("Launching \(app.name)…", busy: true)
-        let r = await PMD3.run(["developer", "core-device", "launch-application", app.bundle_id], udid: udid, timeout: 90)
+        let r = await PMD3.run(args, udid: udid, timeout: 90)
         report(r.ok ? "\(app.name) launched" : "Launch failed: \(r.errorSummary)", error: !r.ok)
+    }
+
+    /// Last options used with "Launch with options…" for this app (shared by all iPhones).
+    func launchOptions(for app: AppInfo) -> LaunchOptions {
+        guard let data = UserDefaults.standard.data(forKey: "launchOptions.\(app.bundle_id)"),
+              let o = try? JSONDecoder().decode(LaunchOptions.self, from: data) else { return LaunchOptions() }
+        return o
+    }
+
+    func saveLaunchOptions(_ o: LaunchOptions, for app: AppInfo) {
+        let key = "launchOptions.\(app.bundle_id)"
+        if o.isEmpty { UserDefaults.standard.removeObject(forKey: key); return }
+        if let data = try? JSONEncoder().encode(o) { UserDefaults.standard.set(data, forKey: key) }
+    }
+
+    /// Copies the app's container (or its Documents folder, when that's all the iPhone vends) to ~/Downloads.
+    func downloadContainer(_ app: AppInfo) async {
+        let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
+        let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+        let dest = uniqueURL(downloads.appendingPathComponent("\(Self.safeFileName(app.name)) container \(stamp)"))
+        do { try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true) } catch {
+            report("Can't create \(dest.lastPathComponent): \(error.localizedDescription)", error: true)
+            return
+        }
+        report("Downloading \(app.name)'s container…", busy: true)
+        var r = await PMD3.run(["apps", "pull", "--", app.bundle_id, "/", dest.path], udid: udid, timeout: 3600)
+        var what = "container"
+        if !r.ok {
+            // Not development-signed: the iPhone vends only its Documents folder, if the app shares files.
+            PMD3.log("[\(udid.prefix(8))] whole container of \(app.bundle_id) refused, trying Documents")
+            r = await PMD3.run(["apps", "pull", "--documents", "--", app.bundle_id, "/Documents", dest.path],
+                               udid: udid, timeout: 3600)
+            what = "Documents folder"
+        }
+        if r.ok {
+            report("\(app.name)'s \(what) saved to Downloads")
+            notify("Container downloaded", "\(app.name): \(dest.lastPathComponent)")
+            NSWorkspace.shared.activateFileViewerSelecting([dest])
+        } else {
+            try? FileManager.default.removeItem(at: dest)
+            report("Can't download \(app.name)'s files: \(r.errorSummary). Only development-signed apps, "
+                   + "or apps that share their Documents, can be read.", error: true)
+        }
+    }
+
+    /// Opens the app's container in the Files tab.
+    func showFiles(of app: AppInfo) async {
+        await setFilesScope(.app(bundleID: app.bundle_id, documentsOnly: false))
+    }
+
+    private static func safeFileName(_ s: String) -> String {
+        let cleaned = s.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
+        return cleaned.trimmingCharacters(in: .whitespaces).isEmpty ? "App" : cleaned
     }
 
     func uninstall(_ app: AppInfo) async {
@@ -237,7 +296,7 @@ final class DeviceTools {
         }
     }
 
-    // MARK: Files (AFC, rooted at /var/mobile/Media)
+    // MARK: Files (AFC: /var/mobile/Media, or an app's container over house_arrest)
 
     struct FileEntry: Identifiable, Hashable, Decodable {
         let name: String
@@ -247,6 +306,7 @@ final class DeviceTools {
         var id: String { name }
     }
 
+    var filesScope: FilesScope = .media
     var filesPath = "/"
     var files: [FileEntry] = []
     var filesLoading = false
@@ -256,27 +316,76 @@ final class DeviceTools {
         (filesPath as NSString).appendingPathComponent(entry.name)
     }
 
+    var canGoUp: Bool { filesScope.canGoUp(from: filesPath) }
+
+    /// Name of what is being browsed, for the Files tab and the drop hint.
+    var filesScopeName: String {
+        guard let id = filesScope.bundleID else { return "Media" }
+        return apps.first { $0.bundle_id == id }?.name ?? id
+    }
+
+    func setFilesScope(_ scope: FilesScope) async {
+        filesScope = scope
+        filesPath = scope.root
+        files = []
+        await refreshFiles()
+    }
+
     func openDirectory(_ path: String) async {
-        filesPath = path.isEmpty ? "/" : path
+        filesPath = path.isEmpty ? filesScope.root : path
         await refreshFiles()
     }
 
     func goUp() async {
-        await openDirectory((filesPath as NSString).deletingLastPathComponent)
+        await openDirectory(filesScope.parent(of: filesPath))
+    }
+
+    private struct ContainerListing: Decodable {
+        let documents: Bool
+        let entries: [FileEntry]
     }
 
     func refreshFiles() async {
         filesLoading = true
         defer { filesLoading = false }
-        let requested = filesPath
-        let r = await PMD3.runHelper(["afc-ls", requested], udid: udid, timeout: 60)
-        guard requested == filesPath else { return }
-        if r.ok, let list = try? JSONDecoder().decode([FileEntry].self, from: r.stdout) {
+        let scope = filesScope, path = filesPath
+        let r: RunResult
+        switch scope {
+        case .media:
+            r = await PMD3.runHelper(["afc-ls", path], udid: udid, timeout: 60)
+        case let .app(bundleID, documentsOnly):
+            r = await PMD3.runHelper(["container-ls", bundleID, path] + (documentsOnly ? ["--documents"] : []),
+                                     udid: udid, timeout: 60)
+        }
+        guard scope == filesScope, path == filesPath else { return }  // moved elsewhere meanwhile
+        var list: [FileEntry]?
+        if r.ok, case let .app(bundleID, documentsOnly) = scope {
+            if let listing = try? JSONDecoder().decode(ContainerListing.self, from: r.stdout) {
+                list = listing.entries
+                if listing.documents && !documentsOnly {
+                    // The helper fell back to the Documents folder: browse from there from now on.
+                    filesScope = .app(bundleID: bundleID, documentsOnly: true)
+                    if !filesScope.canGoUp(from: filesPath) { filesPath = filesScope.root }
+                    report("\(filesScopeName) isn't development-signed: only its Documents folder can be read")
+                }
+            }
+        } else if r.ok {
+            list = try? JSONDecoder().decode([FileEntry].self, from: r.stdout)
+        }
+        if let list {
             files = list.sorted { ($0.dir ? 0 : 1, $0.name.lowercased()) < ($1.dir ? 0 : 1, $1.name.lowercased()) }
             filesError = nil
         } else {
             files = []
-            filesError = r.errorSummary
+            filesError = r.ok ? "Unreadable folder listing" : r.errorSummary
+        }
+    }
+
+    /// `afc` for the Media folder, `apps … BUNDLE` for an app container. Positional arguments follow `--`.
+    private func filesCommand(_ verb: String, _ paths: [String]) -> [String] {
+        switch filesScope {
+        case .media: return ["afc", verb, "--"] + paths
+        case let .app(bundleID, _): return ["apps", verb] + filesScope.appFlags + ["--", bundleID] + paths
         }
     }
 
@@ -285,7 +394,7 @@ final class DeviceTools {
         for url in urls {
             let remote = (filesPath as NSString).appendingPathComponent(url.lastPathComponent)
             report("Copying \(url.lastPathComponent) to iPhone…", busy: true)
-            let r = await PMD3.run(["afc", "push", url.path, remote], udid: udid, timeout: 1800)
+            let r = await PMD3.run(filesCommand("push", [url.path, remote]), udid: udid, timeout: 1800)
             if !r.ok {
                 report("Copy failed: \(r.errorSummary)", error: true)
                 return
@@ -300,7 +409,7 @@ final class DeviceTools {
         let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
         let dest = uniqueURL(downloads.appendingPathComponent(entry.name))
         report("Downloading \(entry.name)…", busy: true)
-        let r = await PMD3.run(["afc", "pull", path(for: entry), dest.path], udid: udid, timeout: 1800)
+        let r = await PMD3.run(filesCommand("pull", [path(for: entry), dest.path]), udid: udid, timeout: 1800)
         if r.ok {
             report("\(entry.name) saved to Downloads")
             NSWorkspace.shared.activateFileViewerSelecting([dest])
@@ -311,7 +420,7 @@ final class DeviceTools {
 
     func delete(_ entry: FileEntry) async {
         report("Deleting \(entry.name)…", busy: true)
-        let r = await PMD3.run(["afc", "rm", path(for: entry)], udid: udid, timeout: 300)
+        let r = await PMD3.run(filesCommand("rm", [path(for: entry)]), udid: udid, timeout: 300)
         report(r.ok ? "\(entry.name) deleted" : "Delete failed: \(r.errorSummary)", error: !r.ok)
         await refreshFiles()
     }
@@ -541,6 +650,42 @@ final class DeviceTools {
             NSWorkspace.shared.activateFileViewerSelecting([url])
         } catch {
             report("Export failed: \(error.localizedDescription)", error: true)
+        }
+    }
+
+    // MARK: Device info and power
+
+    var info: DeviceInfo?
+    var infoLoading = false
+    var infoError: String?
+
+    func refreshInfo() async {
+        infoLoading = true
+        defer { infoLoading = false }
+        let r = await PMD3.runHelper(["info"], udid: udid, timeout: 60)
+        if r.ok, let parsed = DeviceInfo.parse(r.stdout) {
+            info = parsed
+            infoError = nil
+        } else {
+            infoError = r.ok ? "Unreadable device info" : r.errorSummary
+        }
+    }
+
+    enum PowerAction: String {
+        case restart = "Restart", shutdown = "Shut Down"
+        var command: String { self == .restart ? "restart" : "shutdown" }
+        var progress: String { self == .restart ? "Restarting" : "Shutting down" }
+    }
+
+    func power(_ action: PowerAction, deviceName: String) async {
+        report("\(action.progress) \(deviceName)…", busy: true)
+        let r = await PMD3.run(["diagnostics", action.command], udid: udid, timeout: 60)
+        if r.ok {
+            report("\(action.progress) \(deviceName)")
+            notify("\(action.progress) \(deviceName)", "")
+        } else {
+            report("\(action.rawValue) failed: \(r.errorSummary)", error: true)
+            notify("\(action.rawValue) failed", "\(deviceName): \(r.errorSummary)")
         }
     }
 

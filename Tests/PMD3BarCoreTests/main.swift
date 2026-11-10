@@ -245,6 +245,72 @@ suite("Signing.rejection / missingCapabilities") {
     check(Signing.missingCapabilities(app, plan: good).isEmpty, "matching profile grants everything")
 }
 
+suite("DeviceInfo.parse") {
+    let info = DeviceInfo.parse(json("""
+    {"device":{"DeviceName":"iPhone di Test","ProductType":"iPhone17,1","ProductVersion":"27.2","BuildVersion":"24C5",
+               "SerialNumber":"F00","UniqueDeviceID":"U-1","ModelNumber":"MN0X3","RegionInfo":"ZD/A","WiFiAddress":""},
+     "disk":{"TotalDataCapacity":100,"AmountDataAvailable":25,"TotalDataAvailable":60,"TotalDiskCapacity":128},
+     "battery":{"CurrentCapacity":80,"IsCharging":true,"ExternalConnected":true,"CycleCount":312,
+                "DesignCapacity":4000,"NominalChargeCapacity":3540,"AppleRawMaxCapacity":3600,"Temperature":2950},
+     "errors":[]}
+    """))
+    check(info != nil, "parses")
+    guard let info else { return }
+    check(info.rows.first == .init(label: "Name", value: "iPhone di Test"), "name first")
+    check(info.rows.contains(.init(label: "Model number", value: "MN0X3ZD/A")), "model number joined with region")
+    check(!info.rows.contains { $0.label == "Wi-Fi address" }, "empty values hidden")
+    check(info.storage == .init(total: 100, available: 25, availableWithPurgeable: 60) && info.storage?.usedFraction == 0.75,
+          "storage: data partition, free now and with purgeable data")
+    let tight = DeviceInfo.parse(json(#"{"disk":{"TotalDataCapacity":100,"AmountDataAvailable":25,"TotalDataAvailable":25}}"#))
+    check(tight?.storage?.availableWithPurgeable == nil, "no purgeable line when it adds nothing")
+    check(info.battery?.percent == 80 && info.battery?.charging == true, "charge")
+    check(info.battery?.health == 89, "health from nominal / design capacity")
+    check(info.battery?.temperatureC == 29.5, "temperature in hundredths of a degree")
+    check(info.battery?.cycles == 312, "cycles")
+    let bare = DeviceInfo.parse(json(#"{"device":{},"disk":{},"battery":{},"errors":["battery: Timeout"]}"#))
+    check(bare?.storage == nil && bare?.battery == nil && bare?.errors == ["battery: Timeout"], "missing parts")
+    let raw = DeviceInfo.parse(json(#"{"battery":{"DesignCapacity":3000,"AppleRawMaxCapacity":3300}}"#))
+    check(raw?.battery?.health == 110, "falls back to raw max capacity")
+    check(DeviceInfo.parse(json("[]")) == nil, "not an object")
+}
+
+suite("LaunchOptions") {
+    let o = LaunchOptions(arguments: #"-FIRDebugEnabled "two words" 'single $x' a\ b"#,
+                          environment: "API_URL=https://x.test/?a=b\n\n# comment\nDEBUG=1", killExisting: false)
+    check((try? o.parsedArguments()) == ["-FIRDebugEnabled", "two words", "single $x", "a b"], "shell-like split")
+    check((try? o.parsedEnvironment()) == ["API_URL=https://x.test/?a=b", "DEBUG=1"], "env lines, comments skipped")
+    check((try? o.command(bundleID: "com.acme")) == [
+        "developer", "core-device", "launch-application", "--env", "API_URL=https://x.test/?a=b", "--env", "DEBUG=1",
+        "--no-kill-existing", "--", "com.acme", "-FIRDebugEnabled", "two words", "single $x", "a b"],
+          "options before --, app arguments after")
+    check((try? LaunchOptions(arguments: #""open"#).parsedArguments()) == nil, "unclosed quote")
+    check((try? LaunchOptions(arguments: #""""#).parsedArguments()) == [""], "empty quoted argument kept")
+    do {
+        _ = try LaunchOptions(environment: "OK=1\nnot a var").parsedEnvironment()
+        check(false, "bad env line rejected")
+    } catch let e as LaunchOptions.ParseError {
+        check(e == .badVariable(line: 2, text: "not a var"), "bad env line reports line")
+    } catch { check(false, "error type") }
+    check((try? LaunchOptions(environment: "1X=2").parsedEnvironment()) == nil, "name can't start with digit")
+    check((try? LaunchOptions(environment: "=2").parsedEnvironment()) == nil, "empty name")
+    check(LaunchOptions().isEmpty && !LaunchOptions(killExisting: false).isEmpty, "isEmpty")
+}
+
+suite("FilesScope") {
+    let media = FilesScope.media
+    check(!media.canGoUp(from: "/") && media.canGoUp(from: "/DCIM") && media.parent(of: "/DCIM/100APPLE") == "/DCIM",
+          "media navigation")
+    check(media.parent(of: "/DCIM") == "/", "parent of top folder is root")
+    let docs = FilesScope.app(bundleID: "com.acme", documentsOnly: true)
+    check(docs.root == "/Documents" && !docs.canGoUp(from: "/Documents") && !docs.canGoUp(from: "/Documents/"),
+          "documents root")
+    check(docs.parent(of: "/Documents/a/b") == "/Documents/a" && docs.parent(of: "/Library") == "/Documents",
+          "never above Documents")
+    check(docs.appFlags == ["--documents"] && FilesScope.app(bundleID: "x", documentsOnly: false).appFlags.isEmpty,
+          "documents flag")
+    check(docs.bundleID == "com.acme" && media.bundleID == nil, "bundle id")
+}
+
 print("\n\(passed) controlli superati, \(failures.count) falliti")
 for f in failures { print("  ✗ \(f)") }
 exit(failures.isEmpty ? 0 : 1)

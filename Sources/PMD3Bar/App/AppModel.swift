@@ -257,6 +257,27 @@ final class AppModel {
         return t
     }
 
+    /// Restarts or shuts down the iPhone. Its mirroring is stopped first, so it doesn't report a failure.
+    func power(_ action: DeviceTools.PowerAction, udid: String) async {
+        sessions[udid]?.stop()
+        await tools(for: udid).power(action, deviceName: device(udid)?.name ?? "iPhone")
+    }
+
+    /// From the menu bar, which has no window to show a sheet in: asks with an alert first.
+    func confirmPower(_ action: DeviceTools.PowerAction, udid: String) {
+        let name = device(udid)?.name ?? "iPhone"
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "\(action.rawValue) \(name)?"
+        alert.informativeText = action == .shutdown
+            ? "Mirroring and running tools stop. The iPhone has to be turned on again by hand."
+            : "Mirroring and running tools stop until the iPhone is back."
+        alert.addButton(withTitle: action.rawValue)
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        Task { await power(action, udid: udid) }
+    }
+
     /// Window closed: stop its stream and the tools it started (simulated location is cleared).
     func closeWindow(_ udid: String, keepMirroring: Bool = false) {
         if !keepMirroring { sessions[udid]?.stop() }

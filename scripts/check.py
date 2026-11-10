@@ -70,7 +70,7 @@ CLI = [
     (["mounter", "list"], ["--udid"]),
     (["mounter", "auto-mount"], ["--udid"]),
     (["developer", "core-device", "display", "serve-web"], ["--http-port"]),
-    (["developer", "core-device", "launch-application"], []),
+    (["developer", "core-device", "launch-application"], ["--env", "--kill-existing", "--no-kill-existing"]),
     (["developer", "dvt", "simulate-location", "set"], []),
     (["developer", "dvt", "simulate-location", "clear"], []),
     (["syslog", "live"], ["--format", "--no-debug", "--no-info", "--process-name", "--match-insensitive"]),
@@ -79,6 +79,11 @@ CLI = [
     (["afc", "push"], []),
     (["afc", "pull"], []),
     (["afc", "rm"], []),
+    (["apps", "pull"], ["--documents"]),
+    (["apps", "push"], ["--documents"]),
+    (["apps", "rm"], ["--documents"]),
+    (["diagnostics", "restart"], []),
+    (["diagnostics", "shutdown"], []),
     (["developer", "dvt", "condition", "list"], []),
     (["developer", "dvt", "condition", "set"], []),
     (["developer", "dvt", "sysmon", "process", "single"], ["--key"]),
@@ -96,6 +101,11 @@ APIS = [
     ("pymobiledevice3.services.installation_proxy", "InstallationProxyService", ["get_apps", "__aenter__"]),
     ("pymobiledevice3.services.crash_reports", "CrashReportsManager", ["COPY_MOBILE_NAME"]),
     ("pymobiledevice3.services.springboard", "SpringBoardServicesService", ["get_icon_pngdata", "__aenter__"]),
+    ("pymobiledevice3.services.house_arrest", "HouseArrestService", ["create", "__aenter__"]),
+    ("pymobiledevice3.services.house_arrest", "DOCUMENTS_ROOT", []),
+    ("pymobiledevice3.exceptions", "AppNotInstalledError", []),
+    ("pymobiledevice3.services.diagnostics", "DiagnosticsService", ["get_battery", "__aenter__"]),
+    ("pymobiledevice3.lockdown", "LockdownClient", ["get_value"]),
 ]
 
 
@@ -128,6 +138,13 @@ def static_checks() -> None:
                "parametro application_type assente")
     except Exception as e:  # noqa: BLE001
         record(False, "InstallationProxyService.get_apps(application_type=…)", str(e))
+    try:
+        from pymobiledevice3.services.house_arrest import HouseArrestService
+        params = inspect.signature(HouseArrestService.create).parameters
+        record({"bundle_id", "documents_only"} <= set(params), "HouseArrestService.create(bundle_id, documents_only=…)",
+               "parametri cambiati: aggiorna container_ls in pmd3bar_helper.py")
+    except Exception as e:  # noqa: BLE001
+        record(False, "HouseArrestService.create(bundle_id, documents_only=…)", str(e))
 
     print("Viewer e testi attesi")
     try:
@@ -239,12 +256,41 @@ def device_checks(helper_path: str, udid: str | None, location: bool) -> None:
     except Exception as e:  # noqa: BLE001
         record(False, "helper crash-ls /", str(e))
 
+    apps = []
     try:
         apps = helper(helper_path, "apps", udid=udid, timeout=120)
         record(isinstance(apps, list) and (not apps or {"bundle_id", "name", "version"} == set(apps[0])),
                f"helper apps ({len(apps)} app)")
     except Exception as e:  # noqa: BLE001
         record(False, "helper apps", str(e))
+
+    # Store apps usually refuse both their container and Documents: try a few, pass on the first that opens.
+    refused = []
+    for app in apps[:15]:
+        bundle_id = app["bundle_id"]
+        try:
+            listing = helper(helper_path, "container-ls", bundle_id, "/", udid=udid)
+        except Exception as e:  # noqa: BLE001
+            if "doesn't share its files" in str(e):
+                refused.append(bundle_id)
+                continue
+            record(False, f"helper container-ls {bundle_id}", str(e))
+            break
+        record(isinstance(listing.get("documents"), bool) and isinstance(listing.get("entries"), list),
+               f"helper container-ls {bundle_id} (documents={listing.get('documents')})", "formato inatteso")
+        break
+    else:
+        if refused:
+            skip("helper container-ls", f"nessuna delle {len(refused)} app provate condivide i file "
+                                        "(serve un'app firmata in sviluppo o con file sharing)")
+
+    try:
+        details = helper(helper_path, "info", udid=udid)
+        record({"device", "disk", "battery", "errors"} <= set(details) and "ProductVersion" in details["device"],
+               "helper info" + (f" (errori: {'; '.join(details['errors'])})" if details.get("errors") else ""),
+               "campi mancanti")
+    except Exception as e:  # noqa: BLE001
+        record(False, "helper info", str(e))
 
     p = subprocess.Popen([PY, "-I", "-m", "pymobiledevice3", "syslog", "live", "--format", "json", "--no-debug"],
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env(udid))

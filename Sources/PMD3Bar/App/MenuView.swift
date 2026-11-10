@@ -67,7 +67,8 @@ struct MenuView: View {
             mirror: model.sessions[udid],
             select: { model.select(udid) },
             openWindow: { MirrorWindows.shared.show(udid) },
-            stop: { model.stopMirroring(udid) }
+            stop: { model.stopMirroring(udid) },
+            power: { model.confirmPower($0, udid: udid) }
         )
     }
 
@@ -190,6 +191,7 @@ struct DeviceRow: View {
     let select: () -> Void
     let openWindow: () -> Void
     let stop: () -> Void
+    let power: (DeviceTools.PowerAction) -> Void
     @State private var hovering = false
 
     private var mirrorState: MirrorState { mirror?.state ?? .stopped }
@@ -204,6 +206,12 @@ struct DeviceRow: View {
         .padding(.horizontal, 6)
         .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? Color.primary.opacity(0.08) : .clear))
         .onHover { hovering = $0 }
+        .contextMenu {
+            if device.reachable {
+                Button("Restart…") { power(.restart) }
+                Button("Shut Down…") { power(.shutdown) }
+            }
+        }
     }
 
     private var label: some View {
