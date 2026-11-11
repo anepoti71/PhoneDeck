@@ -94,6 +94,25 @@ suite("ViewerLayout.viewportWidth") {
     check(ViewerLayout.viewportWidth(forHeight: 10, ratio: 0.5) == 28 + 100 * 0.5, "tiny heights clamp to 100")
 }
 
+suite("PasscodeKeypad") {
+    // iPhone 15/16: 1179 x 2556 px, @3x, 393 pt wide.
+    check(PasscodeKeypad.pointWidth(pixelWidth: 1179) == 393, "@3x stream")
+    check(PasscodeKeypad.pointWidth(pixelWidth: 828) == 414, "@2x stream (iPhone 11)")
+    check(PasscodeKeypad.pointWidth(pixelWidth: 600) == 390, "scaled stream falls back to 390 pt")
+    let keys = PasscodeKeypad.keys(width: 1179, height: 2556)
+    check(keys.map(\.digit) == ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"], "ten keys, phone order")
+    check(abs(keys[1].x - 0.5) < 1e-9 && abs(keys[9].x - 0.5) < 1e-9, "middle column centred")
+    check(abs((keys[2].x - keys[1].x) * 393 - 104) < 1e-6, "column pitch in points")
+    check(abs((keys[3].y - keys[0].y) * 2556 / 3 - 90) < 1e-6, "row pitch in points")
+    check(abs((keys[4].y + keys[7].y) / 2 - PasscodeKeypad.defaultCenterY) < 1e-9, "keypad centred on centerY")
+    check(abs(keys[0].r * 393 - 38) < 1e-6, "key radius in points")
+    check(PasscodeKeypad.keys(width: 2556, height: 1179).isEmpty, "no keypad in landscape")
+    check(PasscodeKeypad.keys(width: 0, height: 0).isEmpty, "no keypad before the size is known")
+    let clamped = PasscodeKeypad.keys(width: 1179, height: 2556, centerY: 5)
+    check(abs((clamped[4].y + clamped[7].y) / 2 - 0.8) < 1e-9, "centerY clamped")
+    check(PasscodeKeypad.json(Array(keys.prefix(1))).hasPrefix("[{"), "JSON array")
+}
+
 suite("DeviceDates.parse") {
     var cal = Calendar(identifier: .gregorian)
     cal.timeZone = .current

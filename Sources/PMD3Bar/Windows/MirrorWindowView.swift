@@ -167,6 +167,12 @@ struct MirrorWindowView: View {
                 Button { session.start() } label: { Label("Start", systemImage: "play.fill") }
                     .disabled(device?.reachable != true)
             }
+            Toggle(isOn: $viewer.showsPasscodeKeypad) {
+                Label("Passcode keypad", systemImage: "circle.grid.3x3")
+            }
+            .help("Draw the passcode keypad over the screen: iOS hides it from mirroring, but taps on it work. "
+                  + "Drag ⇕ on the right edge to line it up.")
+            .disabled(session.state != .running || !mirroringSupported)
             Button { viewer.deviceOnly.toggle() } label: {
                 Label(viewer.deviceOnly ? "Show controls" : "iPhone only",
                       systemImage: viewer.deviceOnly ? "slider.horizontal.3" : "iphone")

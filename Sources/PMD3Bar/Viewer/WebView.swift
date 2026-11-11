@@ -27,6 +27,9 @@ final class ViewerController {
     /// - udid: remember "only the iPhone" / "controls" for this iPhone (default: only the iPhone).
     /// - deviceOnly: fixed mode, not remembered (grid).
     init(udid: String? = nil, deviceOnly fixed: Bool? = nil) {
+        keypadKey = udid.map { "keypadCenterY.\($0)" }
+        keypadCenterY = keypadKey.flatMap { UserDefaults.standard.object(forKey: $0) as? Double }
+            ?? PasscodeKeypad.defaultCenterY
         modeKey = fixed == nil ? udid.map { "deviceOnly.\($0)" } : nil
         if let fixed {
             deviceOnly = fixed
@@ -70,6 +73,73 @@ final class ViewerController {
     fileprivate func isOnBezel(_ point: CGPoint) -> Bool {
         guard deviceOnly, let deviceFrame, let screenFrame else { return false }
         return deviceFrame.contains(point) && !screenFrame.contains(point)
+    }
+
+    // MARK: Passcode keypad
+
+    /// Draws the lock screen's passcode keypad over the screen. iOS hides it from the stream,
+    /// but taps on it still work. Off by default: turned on from the toolbar when needed.
+    var showsPasscodeKeypad = false {
+        didSet { applyKeypad() }
+    }
+    /// Where this iPhone's keypad height is remembered.
+    @ObservationIgnored private let keypadKey: String?
+    @ObservationIgnored private var keypadCenterY: Double
+    /// Screen size in stream pixels, as last reported by the page.
+    @ObservationIgnored private var canvasSize: CGSize?
+
+    fileprivate func canvasSizeChanged(_ text: String) {
+        let parts = text.split(separator: "x").compactMap { Double($0) }
+        guard parts.count == 2 else { return }
+        canvasSize = CGSize(width: parts[0], height: parts[1])
+        applyKeypad()
+    }
+
+    /// The keypad was dragged to a new height: remember it for this iPhone.
+    fileprivate func keypadMoved(_ text: String) {
+        guard let y = Double(text) else { return }
+        keypadCenterY = min(max(y, PasscodeKeypad.centerYRange.lowerBound), PasscodeKeypad.centerYRange.upperBound)
+        if let keypadKey { UserDefaults.standard.set(keypadCenterY, forKey: keypadKey) }
+        applyKeypad()
+    }
+
+    /// Every live web view of this viewer. SwiftUI can keep more than one (the inspector builds
+    /// hidden content too), and the one in `webView` is not necessarily the one on screen.
+    @ObservationIgnored private let webViews = NSHashTable<WKWebView>.weakObjects()
+
+    fileprivate func attach(_ web: WKWebView) {
+        webViews.add(web)
+        webView = web
+    }
+
+    fileprivate func detach(_ web: WKWebView) {
+        webViews.remove(web)
+        if webView === web { webView = webViews.allObjects.last }
+    }
+
+    /// Shows or hides the keypad on `target`, or on every live web view of this viewer.
+    fileprivate func applyKeypad(on target: WKWebView? = nil) {
+        let targets = target.map { [$0] } ?? webViews.allObjects
+        guard let first = targets.first else { return }
+        if showsPasscodeKeypad, canvasSize == nil {
+            // Size not reported yet: read it from the canvas.
+            first.evaluateJavaScript("(c => c ? c.width + 'x' + c.height : '')(document.getElementById('c'))") { [weak self] result, _ in
+                MainActor.assumeIsolated {
+                    if let size = result as? String, !size.isEmpty { self?.canvasSizeChanged(size) }
+                }
+            }
+            return
+        }
+        var keys: [PasscodeKeypad.Key] = []
+        if showsPasscodeKeypad, let s = canvasSize {
+            keys = PasscodeKeypad.keys(width: s.width, height: s.height, centerY: keypadCenterY)
+        }
+        let json = PasscodeKeypad.json(keys)
+        for web in targets {
+            web.evaluateJavaScript("window.__pmd3barKeypad && window.__pmd3barKeypad.show(\(json), \(keypadCenterY))") { _, error in
+                if let error { PMD3.log("[keypad] show failed: \(error.localizedDescription)") }
+            }
+        }
     }
 
     fileprivate func applyLayout() {
@@ -152,6 +222,7 @@ struct ViewerWebView: NSViewRepresentable {
         ucc.addUserScript(WKUserScript(source: Self.bridgeJS, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         ucc.addUserScript(WKUserScript(source: Self.layoutJS(deviceOnly: controller.deviceOnly),
                                        injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        ucc.addUserScript(WKUserScript(source: Self.keypadJS, injectionTime: .atDocumentStart, forMainFrameOnly: true))
 
         let web = ViewerWKWebView(frame: .zero, configuration: config)
         web.controller = controller
@@ -159,7 +230,7 @@ struct ViewerWebView: NSViewRepresentable {
         web.uiDelegate = context.coordinator
         web.isInspectable = true  // Safari ▸ Develop menu, for debugging the viewer
         web.setValue(false, forKey: "drawsBackground")
-        controller.webView = web
+        controller.attach(web)
         context.coordinator.loadedGeneration = generation
         context.coordinator.viewerURL = url
         context.coordinator.credential = credential
@@ -168,7 +239,7 @@ struct ViewerWebView: NSViewRepresentable {
     }
 
     func updateNSView(_ web: WKWebView, context: Context) {
-        controller.webView = web
+        controller.attach(web)
         context.coordinator.viewerURL = url
         context.coordinator.credential = credential
         if context.coordinator.loadedGeneration != generation || web.url?.port != url.port {
@@ -180,6 +251,7 @@ struct ViewerWebView: NSViewRepresentable {
     static func dismantleNSView(_ web: WKWebView, coordinator: Coordinator) {
         web.configuration.userContentController.removeScriptMessageHandler(forName: "pmd3bar")
         web.stopLoading()
+        coordinator.controller.detach(web)
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler {
@@ -216,6 +288,8 @@ struct ViewerWebView: NSViewRepresentable {
                 case "log": PMD3.log("[viewer] \(text)")
                 case "ratio": if let r = Double(text), r > 0 { controller.canvasRatioChanged(r) }
                 case "geometry": controller.geometryChanged(text)
+                case "canvas": controller.canvasSizeChanged(text)
+                case "keypad-center": controller.keypadMoved(text)
                 case "recording-done": controller.recordingFinished(nil)
                 case "recording-error":
                     PMD3.log("[viewer] recording: \(text)")
@@ -286,7 +360,10 @@ struct ViewerWebView: NSViewRepresentable {
 
         // A reload (serve-web restarted) gets the mode from when the view was made: re-apply the current one.
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            MainActor.assumeIsolated { controller.applyLayout() }
+            MainActor.assumeIsolated {
+                controller.applyLayout()
+                controller.applyKeypad(on: webView)
+            }
         }
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
@@ -331,10 +408,12 @@ struct ViewerWebView: NSViewRepresentable {
             try { window.webkit.messageHandlers.pmd3bar.postMessage({kind, text: String(text)}); } catch (_) {}
           };
           // Tells the app the screen proportions, so the window can be sized around the iPhone.
-          let lastRatio = 0;
+          let lastRatio = 0, lastSize = '';
           const reportRatio = () => {
             const c = document.getElementById('c');
             if (!c || !c.width || !c.height) return;
+            const size = c.width + 'x' + c.height;
+            if (size !== lastSize) { lastSize = size; post('canvas', size); }
             const r = c.width / c.height;
             if (Math.abs(r - lastRatio) < 0.001) return;
             lastRatio = r;
@@ -388,6 +467,129 @@ struct ViewerWebView: NSViewRepresentable {
         })();
         """
     }
+
+    /// Passcode keypad overlay (see `PasscodeKeypad`). `show(keys, centerY)` draws the keys over
+    /// the screen canvas; an empty list removes them. The keys ignore the pointer, so a click on
+    /// one lands on the canvas underneath, at the same spot, and becomes a tap there. The grip on
+    /// the screen's right edge drags the keypad up or down; the new height is sent to the app.
+    static let keypadJS = #"""
+    (() => {
+      const post = (kind, text) => {
+        try { window.webkit.messageHandlers.pmd3bar.postMessage({kind, text: String(text)}); } catch (_) {}
+      };
+      const style = document.createElement('style');
+      style.textContent = `
+        #pmd3-keypad { position: absolute; pointer-events: none; z-index: 5; overflow: hidden;
+          line-height: normal; font-size: 16px; }
+        #pmd3-keypad .keys { position: absolute; inset: 0; }
+        #pmd3-keypad .k { position: absolute; border-radius: 50%; box-sizing: border-box;
+          background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.5);
+          color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center;
+          font-family: -apple-system, system-ui, sans-serif; text-shadow: 0 1px 2px rgba(0,0,0,.7); }
+        #pmd3-keypad .d { font-weight: 400; line-height: 1; }
+        #pmd3-keypad .l { font-weight: 600; letter-spacing: .14em; line-height: 1; margin-top: .2em; }
+        #pmd3-keypad .grip { position: absolute; right: 3px; width: 14px; pointer-events: auto;
+          cursor: ns-resize; border-radius: 7px; background: rgba(255,255,255,.35);
+          border: 1px solid rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center;
+          color: #000; font: 10px -apple-system, system-ui, sans-serif; }
+      `;
+      document.documentElement.appendChild(style);
+
+      let keys = [], centerY = 0.5, root = null, keysEl = null, grip = null, raf = 0, lastRect = '', drag = null;
+
+      const build = () => {
+        root = document.createElement('div');
+        root.id = 'pmd3-keypad';
+        keysEl = document.createElement('div');
+        keysEl.className = 'keys';
+        grip = document.createElement('div');
+        grip.className = 'grip';
+        grip.textContent = '⇕';
+        grip.title = 'Drag to line the keypad up with the iPhone (watch the passcode dots fill in)';
+        grip.addEventListener('pointerdown', e => {
+          e.preventDefault(); e.stopPropagation();
+          try { grip.setPointerCapture(e.pointerId); } catch (_) {}
+          drag = {id: e.pointerId, y0: e.clientY, dy: 0};
+        });
+        grip.addEventListener('pointermove', e => {
+          if (!drag || e.pointerId !== drag.id) return;
+          e.stopPropagation();
+          // Client pixels to the frame's own pixels (the frame may be zoomed with a transform).
+          const box = root.getBoundingClientRect().height;
+          drag.dy = (e.clientY - drag.y0) * (box > 0 ? root.offsetHeight / box : 1);
+          keysEl.style.transform = `translateY(${drag.dy}px)`;
+          grip.style.transform = `translateY(${drag.dy}px)`;
+        });
+        const end = e => {
+          if (!drag || e.pointerId !== drag.id) return;
+          e.stopPropagation();
+          const h = root.offsetHeight;
+          const moved = drag.dy;
+          drag = null;
+          if (h > 0 && moved) post('keypad-center', centerY + moved / h);
+          else { keysEl.style.transform = ''; grip.style.transform = ''; }
+        };
+        grip.addEventListener('pointerup', end);
+        grip.addEventListener('pointercancel', end);
+        root.append(keysEl, grip);
+      };
+
+      // The keypad lives in the device frame next to the canvas, like the viewer's own
+      // #offline-overlay: on top of the video layer, and zoomed / rotated with the frame. It
+      // follows the canvas's box in the frame's own coordinates while shown. WKWebView can hold
+      // back requestAnimationFrame (transparent, borderless windows), so a timer also runs it and
+      // show() lays out right away.
+      let timer = 0;
+      const loop = () => { raf = requestAnimationFrame(loop); layout(); };
+      const layout = () => {
+        const c = document.getElementById('c');
+        if (!c || !root || !c.parentElement) return;
+        if (root.parentElement !== c.parentElement) { c.parentElement.appendChild(root); lastRect = ''; }
+        const r = {left: c.offsetLeft + c.clientLeft, top: c.offsetTop + c.clientTop,
+                   width: c.clientWidth, height: c.clientHeight};
+        const sig = [r.left, r.top, r.width, r.height].join(',');
+        if (sig === lastRect) return;
+        lastRect = sig;
+        Object.assign(root.style, {left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px'});
+        for (const [i, k] of keys.entries()) {
+          const el = keysEl.children[i], d = 2 * k.r * r.width;
+          Object.assign(el.style, {left: (k.x * r.width - d / 2) + 'px', top: (k.y * r.height - d / 2) + 'px',
+                                   width: d + 'px', height: d + 'px'});
+          el.firstChild.style.fontSize = (d * 0.47) + 'px';
+          if (el.children[1]) el.children[1].style.fontSize = (d * 0.13) + 'px';
+        }
+        const gh = Math.max(40, r.height * 0.08);
+        Object.assign(grip.style, {top: (centerY * r.height - gh / 2) + 'px', height: gh + 'px'});
+      };
+
+      window.__pmd3barKeypad = {
+        show(list, cy) {
+          keys = Array.isArray(list) ? list : [];
+          centerY = cy;
+          if (!keys.length) {
+            cancelAnimationFrame(raf); raf = 0;
+            clearInterval(timer); timer = 0;
+            if (root) { root.remove(); root = null; }
+            return;
+          }
+          if (!root) build();
+          keysEl.replaceChildren(...keys.map(k => {
+            const el = document.createElement('div');
+            el.className = 'k';
+            const d = document.createElement('span'); d.className = 'd'; d.textContent = k.digit;
+            el.appendChild(d);
+            if (k.letters) { const l = document.createElement('span'); l.className = 'l'; l.textContent = k.letters; el.appendChild(l); }
+            return el;
+          }));
+          keysEl.style.transform = ''; grip.style.transform = '';
+          lastRect = '';
+          layout();
+          if (!raf) raf = requestAnimationFrame(loop);
+          if (!timer) timer = setInterval(layout, 250);
+        },
+      };
+    })();
+    """#
 
     /// Injected into the viewer: forwards console warnings/errors and records the screen canvas.
     /// The recording includes the iPhone's audio when the viewer is playing it (audio tap below).
