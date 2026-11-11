@@ -142,6 +142,19 @@ final class ViewerController {
         }
     }
 
+    /// Presses the iPhone's Home button, like the viewer's Home button (hidden in "iPhone only").
+    func pressHome() {
+        let js = """
+        fetch('/button', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                          body: JSON.stringify({name: 'home', state: 'press'})})
+          .then(r => { if (!r.ok) console.warn('home: HTTP ' + r.status); })
+          .catch(e => console.warn('home: ' + e.message));
+        """
+        webView?.evaluateJavaScript(js) { _, error in
+            if let error { PMD3.log("[viewer] home failed: \(error.localizedDescription)") }
+        }
+    }
+
     fileprivate func applyLayout() {
         webView?.evaluateJavaScript("window.__pmd3barLayout && window.__pmd3barLayout.setDeviceOnly(\(deviceOnly))")
     }

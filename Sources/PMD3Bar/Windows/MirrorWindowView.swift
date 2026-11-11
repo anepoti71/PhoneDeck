@@ -162,11 +162,16 @@ struct MirrorWindowView: View {
             if !mirroringSupported {
                 EmptyView()
             } else if session.isActive {
-                Button { session.stop() } label: { Label("Stop", systemImage: "stop.fill") }
+                Button { session.stop() } label: { Label("Stop mirroring", systemImage: "iphone.slash") }
+                    .help("Stop mirroring this iPhone")
             } else {
-                Button { session.start() } label: { Label("Start", systemImage: "play.fill") }
+                Button { session.start() } label: { Label("Start mirroring", systemImage: "iphone.badge.play") }
+                    .help("Start mirroring this iPhone")
                     .disabled(device?.reachable != true)
             }
+            Button { viewer.pressHome() } label: { Label("Home", systemImage: "house") }
+                .help("Go to the Home Screen (Home button)")
+                .disabled(session.state != .running || !mirroringSupported)
             Toggle(isOn: $viewer.showsPasscodeKeypad) {
                 Label("Passcode keypad", systemImage: "circle.grid.3x3")
             }
