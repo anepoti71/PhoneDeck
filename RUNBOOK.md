@@ -123,7 +123,7 @@ others the next free ones.
 ## 4. Updating pymobiledevice3
 
 The app contains **its own copy** of pymobiledevice3, pinned together with every dependency in
-`scripts/pymobiledevice3.lock` (currently `11.50.3`): exact versions and the sha256 of each wheel.
+`scripts/pymobiledevice3.lock` (currently `11.52.1`): exact versions and the sha256 of each wheel.
 `make python` installs only from the lock (`--require-hashes`, wheels only, no source builds), so a
 compromised or replaced package on PyPI can't end up in the app. Published updates change nothing
 until you update, and the `pymobiledevice` conda env is separate.
