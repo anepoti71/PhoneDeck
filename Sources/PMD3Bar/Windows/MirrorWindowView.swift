@@ -157,8 +157,9 @@ struct MirrorWindowView: View {
             case .saving:
                 ProgressView().controlSize(.small)
             }
-            Button { NSWorkspace.shared.open(session.browserURL) } label: { Label("Open in browser", systemImage: "safari") }
-                .disabled(session.state != .running)
+            Button { viewer.pressHome() } label: { Label("Home", systemImage: "house") }
+                .help("Go to the Home Screen (Home button)")
+                .disabled(session.state != .running || !mirroringSupported)
             if !mirroringSupported {
                 EmptyView()
             } else if session.isActive {
@@ -169,9 +170,8 @@ struct MirrorWindowView: View {
                     .help("Start mirroring this iPhone")
                     .disabled(device?.reachable != true)
             }
-            Button { viewer.pressHome() } label: { Label("Home", systemImage: "house") }
-                .help("Go to the Home Screen (Home button)")
-                .disabled(session.state != .running || !mirroringSupported)
+            Button { showTools.toggle() } label: { Label("Tools", systemImage: "sidebar.right") }
+                .help("Apps, files, location and developer tools")
             Toggle(isOn: $viewer.showsPasscodeKeypad) {
                 Label("Passcode keypad", systemImage: "circle.grid.3x3")
             }
@@ -186,8 +186,8 @@ struct MirrorWindowView: View {
                   ? "Show the viewer controls: zoom, rotation, buttons, clipboard, accessibility"
                   : "Show only the iPhone")
             .disabled(!mirroringSupported)
-            Button { showTools.toggle() } label: { Label("Tools", systemImage: "sidebar.right") }
-                .help("Apps, files, location and developer tools")
+            Button { NSWorkspace.shared.open(session.browserURL) } label: { Label("Open in browser", systemImage: "safari") }
+                .disabled(session.state != .running)
         }
     }
 
