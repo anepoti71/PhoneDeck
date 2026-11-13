@@ -28,7 +28,10 @@ struct MirrorWindowView: View {
         }
         .frame(minWidth: 300, minHeight: 420)
         .background(bare ? Color.clear : Color.black)
-        .toolbarBackground(bare ? .hidden : .automatic, for: .windowToolbar)
+        // Transparent window: a dark translucent bar behind the buttons, or they blend into the wallpaper.
+        .toolbarBackground(bare ? .visible : .automatic, for: .windowToolbar)
+        .toolbarBackground(bare ? AnyShapeStyle(Color.black.opacity(0.55)) : AnyShapeStyle(.bar),
+                           for: .windowToolbar)
         .overlay {
             if dropTargeted {
                 RoundedRectangle(cornerRadius: 12).strokeBorder(Color.accentColor, lineWidth: 4)
@@ -56,7 +59,9 @@ struct MirrorWindowView: View {
         .toolbar { toolbar }
         .navigationTitle(device?.name ?? "iPhone")
         .navigationSubtitle(bare ? "" : subtitle)
-        .modifier(HideTitle(hidden: bare))
+        // With the tools open the toolbar only gets the iPhone's column: without the title the
+        // buttons fit instead of collapsing into the » overflow menu.
+        .modifier(HideTitle(hidden: bare || showTools))
         .onAppear {
             viewer.deviceName = device?.name ?? "iPhone"
             if !mirroringSupported { showTools = true }
@@ -170,7 +175,7 @@ struct MirrorWindowView: View {
                     .help("Start mirroring this iPhone")
                     .disabled(device?.reachable != true)
             }
-            Button { showTools.toggle() } label: { Label("Tools", systemImage: "sidebar.right") }
+            Button { showTools.toggle() } label: { Label("Tools", systemImage: "wrench.and.screwdriver") }
                 .help("Apps, files, location and developer tools")
             Toggle(isOn: $viewer.showsPasscodeKeypad) {
                 Label("Passcode keypad", systemImage: "circle.grid.3x3")

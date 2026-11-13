@@ -17,6 +17,9 @@ struct MenuView: View {
         }
         .padding(14)
         .frame(width: 350)
+        // The first focusable control got keyboard focus when the menu opened, and a blue ring
+        // around it (the Settings header, then the device row).
+        .focusEffectDisabled()
     }
 
     // MARK: Sections
@@ -113,32 +116,58 @@ struct MenuView: View {
 
     @AppStorage("settingsExpanded") private var settingsExpanded = false
 
+    /// Plain button instead of a DisclosureGroup: the DisclosureGroup took keyboard focus when the
+    /// menu opened and drew its focus ring offset over the label.
     private var settings: some View {
-        DisclosureGroup("Settings", isExpanded: $settingsExpanded) {
-            VStack(alignment: .leading, spacing: 6) {
-                Toggle("Mount the Developer Disk Image as soon as an iPhone connects", isOn: $model.autoMountDDI)
-                Toggle("Notifications", isOn: $model.notificationsEnabled)
-                Toggle("Shortcut ⌥⌘M: show/hide the selected iPhone's window", isOn: $model.hotKeyEnabled)
-                if LoginItem.available {
-                    Toggle("Launch at login", isOn: Binding(
-                        get: { model.launchAtLogin }, set: { model.setLaunchAtLogin($0) }))
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { settingsExpanded.toggle() }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "gearshape")
+                    Text("Settings")
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .rotationEffect(.degrees(settingsExpanded ? 90 : 0))
                 }
-                HStack {
-                    Text("Starting port")
-                    TextField("", value: $model.httpPort, format: .number.grouping(.never))
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 70)
-                        .help("The first iPhone uses this port, the others the next free ones")
-                }
-                if let err = model.settingsError {
-                    Text(err).foregroundStyle(.red)
-                }
+                .foregroundStyle(.secondary)
+                .contentShape(Rectangle())
             }
-            .toggleStyle(.checkbox)
-            .font(.caption)
-            .padding(.top, 4)
+            .buttonStyle(.plain)
+            .help(settingsExpanded ? "Hide settings" : "Show settings")
+            .accessibilityLabel("Settings")
+            .accessibilityValue(settingsExpanded ? "expanded" : "collapsed")
+
+            if settingsExpanded { settingsContent }
         }
         .font(.caption)
+    }
+
+    private var settingsContent: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle("Mount the Developer Disk Image as soon as an iPhone connects", isOn: $model.autoMountDDI)
+            Toggle("Notifications", isOn: $model.notificationsEnabled)
+            Toggle("Shortcut ⌥⌘M: show/hide the selected iPhone's window", isOn: $model.hotKeyEnabled)
+            if LoginItem.available {
+                Toggle("Launch at login", isOn: Binding(
+                    get: { model.launchAtLogin }, set: { model.setLaunchAtLogin($0) }))
+            }
+            HStack {
+                Text("Starting port")
+                TextField("", value: $model.httpPort, format: .number.grouping(.never))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 70)
+                    .help("The first iPhone uses this port, the others the next free ones")
+            }
+            if let err = model.settingsError {
+                Text(err).foregroundStyle(.red)
+            }
+        }
+        .toggleStyle(.checkbox)
+        .font(.caption)
+        .padding(.top, 6)
+        .padding(.leading, 18)
     }
 
     @State private var refreshing = false

@@ -31,8 +31,13 @@ final class MirrorWindows: NSObject, NSWindowDelegate {
 
     private func applyBare(_ w: NSWindow, _ on: Bool) {
         w.isOpaque = !on
-        w.backgroundColor = on ? .clear : .black
+        // Not black: the inspector (tools panel) shows the window background behind its top, and its
+        // light-mode pickers were unreadable on black. The view paints black behind the iPhone itself.
+        w.backgroundColor = on ? .clear : .windowBackgroundColor
         w.titlebarAppearsTransparent = on
+        // Transparent window: the toolbar buttons sit on the desktop with no bar behind them, and
+        // light-mode glyphs (dark grey) vanished on dark wallpapers. Dark ones match the iPhone frame.
+        w.appearance = on ? NSAppearance(named: .darkAqua) : nil
         w.titleVisibility = on ? .hidden : .visible
         w.invalidateShadow()
     }
