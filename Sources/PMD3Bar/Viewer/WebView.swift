@@ -155,6 +155,59 @@ final class ViewerController {
         }
     }
 
+    /// Puts the Mac clipboard (text, or else an image) on the iPhone's pasteboard and types ⌘V,
+    /// so it lands in whatever field has the focus there. Logs sizes only, never the content.
+    func pasteFromMac() {
+        guard let webView else { return }
+        let pb = NSPasteboard.general
+        let text = pb.string(forType: .string)
+        let png = (text?.isEmpty ?? true) ? Self.pngFromPasteboard(pb) : nil
+        let payload: MacPaste.Payload
+        switch MacPaste.payload(text: text, png: png) {
+        case .success(let p): payload = p
+        case .failure(let problem): lastError = problem.message; return
+        }
+        var args: [String: Any] = ["reports": MacPaste.commandVReports, "text": NSNull(), "png": NSNull()]
+        let what: String
+        switch payload {
+        case .text(let s): args["text"] = s; what = "\(s.count) chars"
+        case .png(let d): args["png"] = d.base64EncodedString(); what = "image, \(d.count / 1024) KB"
+        }
+        let js = """
+        const post = (path, type, body) => fetch(path, {method: 'POST', headers: {'Content-Type': type}, body});
+        const r = text !== null
+          ? await post('/clipboard', 'application/json', JSON.stringify({text}))
+          : await post('/clipboard/image', 'image/png', Uint8Array.from(atob(png), c => c.charCodeAt(0)));
+        if (!r.ok) return 'Could not set the iPhone clipboard (HTTP ' + r.status + ').';
+        for (const usages of reports) await post('/key', 'application/json', JSON.stringify({usages}));
+        return '';
+        """
+        webView.callAsyncJavaScript(js, arguments: args, in: nil, in: .page) { [weak self] result in
+            MainActor.assumeIsolated {
+                switch result {
+                case .success(let value):
+                    if let msg = value as? String, !msg.isEmpty {
+                        self?.lastError = msg
+                        PMD3.log("[viewer] paste from Mac failed: \(msg)")
+                    } else {
+                        PMD3.log("[viewer] pasted from Mac (\(what))")
+                    }
+                case .failure(let error):
+                    self?.lastError = "Paste failed: \(error.localizedDescription)"
+                    PMD3.log("[viewer] paste from Mac failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    /// The pasteboard's image as PNG: as is when it already holds PNG, otherwise re-encoded
+    /// (screenshots and Preview copy TIFF).
+    private static func pngFromPasteboard(_ pb: NSPasteboard) -> Data? {
+        if let png = pb.data(forType: .png) { return png }
+        guard let tiff = pb.data(forType: .tiff), let rep = NSBitmapImageRep(data: tiff) else { return nil }
+        return rep.representation(using: .png, properties: [:])
+    }
+
     fileprivate func applyLayout() {
         webView?.evaluateJavaScript("window.__pmd3barLayout && window.__pmd3barLayout.setDeviceOnly(\(deviceOnly))")
     }

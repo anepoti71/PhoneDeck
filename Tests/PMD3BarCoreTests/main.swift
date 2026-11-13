@@ -424,6 +424,22 @@ suite("Safety: viewer navigation") {
     check(!Safety.mayOpenExternally(URL(string: "x-apple.systempreferences:com.apple")!, userClicked: true), "custom scheme")
 }
 
+suite("MacPaste") {
+    let png = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00])
+    check(MacPaste.payload(text: "ciao", png: png) == .success(.text("ciao")), "text wins over an image")
+    check(MacPaste.payload(text: " \n", png: nil) == .success(.text(" \n")), "whitespace is pasted as is")
+    check(MacPaste.payload(text: "", png: png) == .success(.png(png)), "image when there is no text")
+    check(MacPaste.payload(text: nil, png: nil) == .failure(.empty), "nothing to paste")
+    check(MacPaste.payload(text: nil, png: Data([1, 2, 3])) == .failure(.empty), "not a PNG")
+    let big = png + Data(count: MacPaste.maxBytes)
+    check(MacPaste.payload(text: nil, png: big) == .failure(.tooLarge(bytes: big.count)), "image over the limit")
+    let long = String(repeating: "é", count: MacPaste.maxBytes / 2 + 1)
+    check(MacPaste.payload(text: long, png: nil) == .failure(.tooLarge(bytes: long.utf8.count)), "text over the limit, in UTF-8 bytes")
+    check(MacPaste.Problem.tooLarge(bytes: 40 * 1024 * 1024).message.contains("40 MB"), "size in the message")
+    // ⌘ down, ⌘V, V up, all up: iOS sees the modifier before the key, as from a real keyboard.
+    check(MacPaste.commandVReports == [[0xE3], [0xE3, 0x19], [0xE3], []], "⌘V key reports")
+}
+
 print("\n\(passed) checks passed, \(failures.count) failed")
 for f in failures { print("  ✗ \(f)") }
 exit(failures.isEmpty ? 0 : 1)

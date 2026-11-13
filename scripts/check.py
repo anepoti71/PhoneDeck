@@ -184,6 +184,11 @@ def static_checks() -> None:
     except Exception as e:  # noqa: BLE001
         record(False, "risorse del viewer", str(e))
     root = Path(importlib.import_module("pymobiledevice3").__file__).parent
+    stream_src = (root / "remote" / "core_device" / "screen_stream.py").read_text(errors="ignore")
+    routes = ['"/clipboard"', '"/clipboard/image"', '"/key"', "_CLIPBOARD_MAX_BODY = 32 * 1024 * 1024"]
+    missing = [r for r in routes if r not in stream_src]
+    record(not missing, "serve-web: /clipboard, /clipboard/image, /key e limite 32 MB (Paste from Mac)",
+           f"mancanti: {', '.join(missing)}: aggiorna MacPaste (MacPaste.swift) e pasteFromMac (WebView.swift)")
     webdav_src = (root / "services" / "webdav.py").read_text(errors="ignore")
     record("Mounted; revealed " in webdav_src and "Automatic mount is unavailable" in webdav_src,
            "testi attesi da apps webdav --mount",

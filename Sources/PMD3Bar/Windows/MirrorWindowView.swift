@@ -165,6 +165,9 @@ struct MirrorWindowView: View {
             Button { viewer.pressHome() } label: { Label("Home", systemImage: "house") }
                 .help("Go to the Home Screen (Home button)")
                 .disabled(session.state != .running || !mirroringSupported)
+            Button { viewer.pasteFromMac() } label: { Label("Paste from Mac", systemImage: "doc.on.clipboard") }
+                .help("Paste the Mac clipboard (text or image) into the iPhone's focused field")
+                .disabled(session.state != .running || !mirroringSupported)
             if !mirroringSupported {
                 EmptyView()
             } else if session.isActive {
