@@ -86,13 +86,15 @@ build/python/bin/python3 -I Resources/pmd3bar_helper.py list
 4. The window shows **only the iPhone**, like the Simulator: it is transparent around the bezel,
    the title is hidden and the toolbar floats above the device; drag the bezel to move it. It is
    as wide as the iPhone needs: resizing keeps the proportions, and it adapts by itself when the
-   iPhone rotates. With the controls or Tools open it goes back to a regular black window. In the
-   window toolbar:
-   - 🎚 **Show controls**: the viewer's zoom, rotation, bezel, Home/Siri/Swipe, clipboard and
-     accessibility. The same button ("iPhone only") hides them again. The choice is remembered
-     **per iPhone**;
+   iPhone rotates. With Tools open it goes back to a regular black window. The viewer's own
+   controls (zoom, swipe buttons, clipboard panel, ...) are always hidden, and the viewer can't be
+   opened in a browser. In the window toolbar:
    - ⏺ records the screen with the iPhone's audio (MP4: H.264 + AAC) to `~/Downloads`;
-   - 🧭 opens the same viewer in the browser;
+   - 📷 saves a screenshot (PNG) to `~/Downloads`;
+   - ⌂ presses Home; **Buttons** presses Lock, Volume Up/Down, Mute or Siri (Lock and Siri are
+     held as long as the real button needs);
+   - 📋 **Paste from Mac** puts the Mac clipboard (text, or else an image) on the iPhone and
+     types ⌘V into the focused field;
    - ■ stops mirroring;
    - ▯ opens the **Tools** panel: Apps, Files, Location, Developer (Conditions, Processes,
      Crashes, Log). The window widens to make room and narrows again when you close it.
@@ -286,8 +288,8 @@ PhoneDeck.app/Contents/
   - The viewer is locked down: `--bind 127.0.0.1`, plus a random `--password` made for each start
     and handed to serve-web on stdin (so `ps` never shows it). The window sends the password only
     after checking that the port is held by its own serve-web process, so a program that grabbed the
-    port first gets neither the password nor a page in the window. "Open in browser" opens a URL
-    with the password in it.
+    port first gets neither the password nor a page in the window. The password never leaves
+    the app: there is no "open in browser".
   - The window only follows the viewer's own address. A link you click to a web page opens in the
     default browser; `file:` URLs, apps and custom schemes are never opened.
 - **`pmd3bar_helper.py`** does what the pymobiledevice3 command line can't:

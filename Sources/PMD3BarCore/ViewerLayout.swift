@@ -1,6 +1,6 @@
 import CoreGraphics
 
-/// Geometry of the viewer page in "device only" mode, shared by the injected script and the
+/// Geometry of the viewer page (only the iPhone, the viewer's controls hidden), shared by the injected script and the
 /// window sizing. The page keeps a transparent `margin` on every side of the device frame (room
 /// for the bezel's hardware buttons, which stick out of it), and the frame fills the rest of the
 /// viewport height.

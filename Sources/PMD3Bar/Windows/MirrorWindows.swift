@@ -10,20 +10,19 @@ final class MirrorWindows: NSObject, NSWindowDelegate {
     private var windows: [String: NSWindow] = [:]
     weak var model: AppModel?
 
-    /// What the window size follows: in "device only" mode with the tools closed, the window is
+    /// What the window size follows: with the tools closed, the window is
     /// as wide as the iPhone screen needs for its height (and keeps that shape when resized).
     private struct Fit {
         var ratio: Double?
-        var deviceOnly = true
         var tools = false
-        var active: Bool { deviceOnly && !tools && ratio != nil }
+        var active: Bool { !tools && ratio != nil }
     }
     private var fits: [String: Fit] = [:]
     /// Windows showing only the mirrored iPhone: transparent around the device, like the Simulator.
     private var bare: Set<String> = []
 
     /// Makes the window transparent around the iPhone (only the iPhone showing, mirroring running),
-    /// or back to a regular black window (controls, tools, placeholders).
+    /// or back to a regular black window (tools, placeholders).
     func setBare(_ udid: String, _ on: Bool) {
         if on { bare.insert(udid) } else { bare.remove(udid) }
         if let w = windows[udid] { applyBare(w, on) }
@@ -51,12 +50,11 @@ final class MirrorWindows: NSObject, NSWindowDelegate {
     static let toolsWidth: CGFloat = 340
     private static let minWidth: CGFloat = 300
 
-    /// Reports a change of screen proportions, layout mode or tools panel for a window.
-    func updateFit(_ udid: String, ratio: Double? = nil, deviceOnly: Bool? = nil, tools: Bool? = nil) {
+    /// Reports a change of screen proportions or tools panel for a window.
+    func updateFit(_ udid: String, ratio: Double? = nil, tools: Bool? = nil) {
         var fit = fits[udid] ?? Fit()
         let wasTools = fit.tools
         if let ratio { fit.ratio = ratio }
-        if let deviceOnly { fit.deviceOnly = deviceOnly }
         if let tools { fit.tools = tools }
         let firstReport = fits[udid] == nil
         fits[udid] = fit

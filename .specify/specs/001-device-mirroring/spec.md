@@ -58,9 +58,11 @@
 - FR-025: If the USB cable is pulled while an iPhone is mirrored over USB and the iPhone is still
   reachable over Wi-Fi, the system SHALL restart mirroring over Wi-Fi.
 - FR-026: An iPhone being mirrored SHALL stay in the list while it is briefly not visible.
-- FR-027: The window SHALL default to "iPhone only": transparent around the device, sized to the
-  device's proportions, keeping them on resize and when the iPhone rotates. Showing the controls or
-  the Tools panel switches it to a regular window. The choice is remembered per iPhone.
+- FR-027: The window SHALL show "iPhone only": transparent around the device, sized to the
+  device's proportions, keeping them on resize and when the iPhone rotates. The viewer's own
+  controls are never shown; the toolbar offers Home and a Buttons menu (Lock, Volume Up/Down,
+  Mute, Siri) instead. Opening the Tools panel switches it to a regular window. The viewer is not
+  opened outside the app (no "open in browser").
 - FR-028: ⌥⌘M SHALL show the selected iPhone's window, or close it if it is already in front. If
   the shortcut cannot be registered, Settings SHALL say so.
 - FR-029: With at least two reachable iPhones on iOS 27 or later, "All in grid" SHALL show all of

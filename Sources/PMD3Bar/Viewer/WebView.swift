@@ -13,32 +13,11 @@ final class ViewerController {
     var lastError: String?
     /// Name used for screenshots/recordings saved from this viewer.
     var deviceName = "iPhone"
-    /// Only the iPhone, without the viewer's top bar, side trays and button row. The default;
-    /// the choice is remembered for the next windows.
-    var deviceOnly: Bool = true {
-        didSet {
-            if let key = modeKey { UserDefaults.standard.set(deviceOnly, forKey: key) }
-            applyLayout()
-        }
-    }
-    /// Where this iPhone's mode is remembered (nil for the grid, which always shows only the iPhones).
-    @ObservationIgnored private let modeKey: String?
-
-    /// - udid: remember "only the iPhone" / "controls" for this iPhone (default: only the iPhone).
-    /// - deviceOnly: fixed mode, not remembered (grid).
-    init(udid: String? = nil, deviceOnly fixed: Bool? = nil) {
+    /// - udid: where this iPhone's passcode keypad height is remembered (nil: not remembered).
+    init(udid: String? = nil) {
         keypadKey = udid.map { "keypadCenterY.\($0)" }
         keypadCenterY = keypadKey.flatMap { UserDefaults.standard.object(forKey: $0) as? Double }
             ?? PasscodeKeypad.defaultCenterY
-        modeKey = fixed == nil ? udid.map { "deviceOnly.\($0)" } : nil
-        if let fixed {
-            deviceOnly = fixed
-        } else if let key = modeKey, let saved = UserDefaults.standard.object(forKey: key) as? Bool {
-            deviceOnly = saved
-        } else {
-            // Before per-iPhone memory there was one setting for every window.
-            deviceOnly = UserDefaults.standard.object(forKey: "deviceOnly") as? Bool ?? true
-        }
     }
     fileprivate weak var webView: WKWebView?
     /// Width / height of the iPhone screen as streamed (changes with rotation).
@@ -71,7 +50,7 @@ final class ViewerController {
     /// True when a click at `point` (top-left origin) lands on the bezel: the device frame
     /// outside the screen. The hardware buttons sit outside the frame and keep working.
     fileprivate func isOnBezel(_ point: CGPoint) -> Bool {
-        guard deviceOnly, let deviceFrame, let screenFrame else { return false }
+        guard let deviceFrame, let screenFrame else { return false }
         return deviceFrame.contains(point) && !screenFrame.contains(point)
     }
 
@@ -142,16 +121,37 @@ final class ViewerController {
         }
     }
 
-    /// Presses the iPhone's Home button, like the viewer's Home button (hidden in "iPhone only").
-    func pressHome() {
+    /// Saves a PNG of the screen to Downloads, through the viewer's own (hidden) screenshot button.
+    func takeScreenshot() {
+        webView?.evaluateJavaScript("document.getElementById('screenshot').click()") { [weak self] _, error in
+            MainActor.assumeIsolated {
+                if let error {
+                    self?.lastError = "Screenshot failed: \(error.localizedDescription)"
+                    PMD3.log("[viewer] screenshot failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    /// Presses one of the iPhone's physical buttons through the viewer server.
+    func press(_ button: HardwareButton) {
         let js = """
-        fetch('/button', {method: 'POST', headers: {'Content-Type': 'application/json'},
-                          body: JSON.stringify({name: 'home', state: 'press'})})
-          .then(r => { if (!r.ok) console.warn('home: HTTP ' + r.status); })
-          .catch(e => console.warn('home: ' + e.message));
+        const r = await fetch('/button', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                          body: JSON.stringify({name, state: 'press'})});
+        return r.ok ? '' : 'HTTP ' + r.status;
         """
-        webView?.evaluateJavaScript(js) { _, error in
-            if let error { PMD3.log("[viewer] home failed: \(error.localizedDescription)") }
+        webView?.callAsyncJavaScript(js, arguments: ["name": button.rawValue], in: nil, in: .page) { [weak self] result in
+            MainActor.assumeIsolated {
+                let problem: String?
+                switch result {
+                case .success(let value): problem = (value as? String).flatMap { $0.isEmpty ? nil : $0 }
+                case .failure(let error): problem = error.localizedDescription
+                }
+                if let problem {
+                    self?.lastError = "\(button.title) failed: \(problem)"
+                    PMD3.log("[viewer] \(button.rawValue) failed: \(problem)")
+                }
+            }
         }
     }
 
@@ -206,10 +206,6 @@ final class ViewerController {
         if let png = pb.data(forType: .png) { return png }
         guard let tiff = pb.data(forType: .tiff), let rep = NSBitmapImageRep(data: tiff) else { return nil }
         return rep.representation(using: .png, properties: [:])
-    }
-
-    fileprivate func applyLayout() {
-        webView?.evaluateJavaScript("window.__pmd3barLayout && window.__pmd3barLayout.setDeviceOnly(\(deviceOnly))")
     }
 
     func startRecording() {
@@ -286,7 +282,7 @@ struct ViewerWebView: NSViewRepresentable {
         let ucc = config.userContentController
         ucc.add(context.coordinator, name: "pmd3bar")
         ucc.addUserScript(WKUserScript(source: Self.bridgeJS, injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        ucc.addUserScript(WKUserScript(source: Self.layoutJS(deviceOnly: controller.deviceOnly),
+        ucc.addUserScript(WKUserScript(source: Self.layoutJS,
                                        injectionTime: .atDocumentStart, forMainFrameOnly: true))
         ucc.addUserScript(WKUserScript(source: Self.keypadJS, injectionTime: .atDocumentStart, forMainFrameOnly: true))
 
@@ -424,10 +420,9 @@ struct ViewerWebView: NSViewRepresentable {
             PMD3.log("Download failed: \(error.localizedDescription)")
         }
 
-        // A reload (serve-web restarted) gets the mode from when the view was made: re-apply the current one.
+        // A reload (serve-web restarted) starts without the keypad: re-apply it.
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             MainActor.assumeIsolated {
-                controller.applyLayout()
                 controller.applyKeypad(on: webView)
             }
         }
@@ -439,14 +434,14 @@ struct ViewerWebView: NSViewRepresentable {
 
     /// Viewer layout, injected at document start:
     /// - always hides the pymobiledevice3 branding (logo + name) in the top bar;
-    /// - "device only" mode (`html.pmd3-device-only`) hides the top bar, both side trays and the
-    ///   button row, and makes the page transparent around the device (no background, glow or
+    /// - hides the viewer's own controls (top bar, both side trays and the button row): the app's
+    ///   toolbar replaces them. The page is transparent around the device (no background, glow or
     ///   drop shadow), so the window can take the iPhone's shape. The viewer's
-    ///   fitCanvasToViewport() keeps 150 px of height and 88 px of width for its own chrome: in
-    ///   this mode it is shown a viewport that only keeps our margin, for the duration of the
-    ///   call, so the device fills the window. `make check` verifies what this relies on.
+    ///   fitCanvasToViewport() keeps 150 px of height and 88 px of width for that chrome: it is
+    ///   shown a viewport that only keeps our margin, for the duration of the call, so the device
+    ///   fills the window. `make check` verifies what this relies on.
     /// - reports the screen proportions (window sizing) and where the bezel is (window dragging).
-    static func layoutJS(deviceOnly: Bool) -> String {
+    static var layoutJS: String {
         let m = Int(ViewerLayout.margin)
         return """
         (() => {
@@ -465,8 +460,7 @@ struct ViewerWebView: NSViewRepresentable {
           `;
           document.documentElement.appendChild(style);
 
-          let deviceOnly = \(deviceOnly);
-          document.documentElement.classList.toggle('pmd3-device-only', deviceOnly);
+          document.documentElement.classList.add('pmd3-device-only');
 
           const VIEWER_RESERVED_W = \(Int(ViewerLayout.viewerReservedWidth)), OWN_RESERVED_W = \(Int(ViewerLayout.reservedWidth));
           const VIEWER_RESERVED_H = \(Int(ViewerLayout.viewerReservedHeight)), OWN_RESERVED_H = \(Int(ViewerLayout.ownReservedHeight));
@@ -503,7 +497,6 @@ struct ViewerWebView: NSViewRepresentable {
               try { return fitInner(); } finally { reportRatio(); requestAnimationFrame(reportGeometry); }
             };
             const fitInner = function () {
-              if (!deviceOnly) return orig();
               const own = {h: Object.getOwnPropertyDescriptor(window, 'innerHeight'),
                            w: Object.getOwnPropertyDescriptor(window, 'innerWidth')};
               const h = window.innerHeight, w = window.innerWidth;
@@ -522,14 +515,6 @@ struct ViewerWebView: NSViewRepresentable {
             fit();
           };
           window.addEventListener('DOMContentLoaded', install);
-          window.__pmd3barLayout = {
-            setDeviceOnly(on) {
-              deviceOnly = on;
-              document.documentElement.classList.toggle('pmd3-device-only', on);
-              install();
-              if (typeof window.fitCanvasToViewport === 'function') window.fitCanvasToViewport();
-            },
-          };
         })();
         """
     }

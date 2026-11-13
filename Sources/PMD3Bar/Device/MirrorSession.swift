@@ -30,14 +30,6 @@ final class MirrorSession: Identifiable {
     var credential: URLCredential? {
         state == .running ? URLCredential(user: "phonedeck", password: password, persistence: .forSession) : nil
     }
-    /// The viewer URL with the credential in it, for opening the viewer in the default browser.
-    var browserURL: URL {
-        var c = URLComponents(url: viewerURL, resolvingAgainstBaseURL: false)!
-        c.user = "phonedeck"
-        c.password = password
-        return c.url ?? viewerURL
-    }
-
     private static func newPassword() -> String {
         var bytes = [UInt8](repeating: 0, count: 24)
         _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)

@@ -11,7 +11,7 @@ struct GridView: View {
         private var controllers: [String: ViewerController] = [:]
         @MainActor func controller(for udid: String, name: String) -> ViewerController {
             if let c = controllers[udid] { return c }
-            let c = ViewerController(deviceOnly: true)  // grid: always only the iPhones, not remembered
+            let c = ViewerController()
             c.deviceName = name
             controllers[udid] = c
             return c

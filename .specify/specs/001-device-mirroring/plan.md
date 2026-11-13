@@ -26,7 +26,7 @@
 | Developer Disk Image | `MountState`, `isDeveloperImageMounted` | `PMD3BarCore` | "Mount" names the state of the DDI, not a separate concept |
 | Mirror Session | `MirrorSession` | `Sources/PMD3Bar/Device/MirrorSession.swift` | none — exact match |
 | Mirror Window | `MirrorWindows` (registry), `MirrorWindowView` | `Sources/PMD3Bar/Windows/` | none |
-| iPhone only mode | `deviceOnly`, `bare` | `Windows/`, `Viewer/` | **Deviation**: two code names for one concept. Candidate rename to a single term |
+| iPhone only mode | `bare` | `Windows/` | none: the `deviceOnly` toggle was removed, the viewer is always laid out this way |
 | Viewer | `ViewerWebView`, `ViewerController`, `ViewerLayout` | `Viewer/`, `PMD3BarCore` | none |
 | Grid | `GridView`, `showGrid()` | `Windows/` | none |
 | Starting port | `AppModel.httpPort` (defaults key `httpPort`) | `App/` | Key name kept for settings compatibility (constitution: identity stability) |
@@ -95,7 +95,7 @@ N/A — feature makes no LLM calls and produces no AI-driven output. Standard lo
   `PMD3BarCore` logic.
 - [ ] TASK-004: Document the `--test-notification` launch argument in RUNBOOK §2 (kept as a
   diagnostic, FR-031).
-- [ ] TASK-005: Unify the "iPhone only mode" code names (`deviceOnly` / `bare`).
+- [x] TASK-005: Unify the "iPhone only mode" code names (`deviceOnly` / `bare`): `deviceOnly` removed with the "Show controls" mode.
 - [ ] TASK-006: Translate the remaining Italian strings in `scripts/check.py` serve-web messages
   (lines ~349–379), the `make test` summary line ("controlli superati, … falliti") and the
   `AppModel` "Impostazioni" comment.

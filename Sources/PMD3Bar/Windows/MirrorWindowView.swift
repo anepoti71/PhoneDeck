@@ -67,17 +67,16 @@ struct MirrorWindowView: View {
             if !mirroringSupported { showTools = true }
             viewer.onCanvasRatio = { [udid] r in MirrorWindows.shared.updateFit(udid, ratio: r) }
             viewer.onLayout = { [udid] in MirrorWindows.shared.deviceLaidOut(udid) }
-            MirrorWindows.shared.updateFit(udid, deviceOnly: viewer.deviceOnly, tools: showTools)
+            MirrorWindows.shared.updateFit(udid, tools: showTools)
             MirrorWindows.shared.setBare(udid, bare)
         }
         .onChange(of: showTools) { _, on in MirrorWindows.shared.updateFit(udid, tools: on) }
-        .onChange(of: viewer.deviceOnly) { _, on in MirrorWindows.shared.updateFit(udid, deviceOnly: on) }
         .onChange(of: bare) { _, on in MirrorWindows.shared.setBare(udid, on) }
     }
 
     /// Only the mirrored iPhone showing: the window is transparent around it, like the Simulator.
     private var bare: Bool {
-        viewer.deviceOnly && !showTools && mirroringSupported && session.state == .running
+        !showTools && mirroringSupported && session.state == .running
     }
 
     private var subtitle: String {
@@ -162,9 +161,21 @@ struct MirrorWindowView: View {
             case .saving:
                 ProgressView().controlSize(.small)
             }
-            Button { viewer.pressHome() } label: { Label("Home", systemImage: "house") }
+            Button { viewer.takeScreenshot() } label: { Label("Screenshot", systemImage: "camera") }
+                .help("Save a screenshot to Downloads")
+                .disabled(session.state != .running || !mirroringSupported)
+            Button { viewer.press(.home) } label: { Label("Home", systemImage: HardwareButton.home.symbol) }
                 .help("Go to the Home Screen (Home button)")
                 .disabled(session.state != .running || !mirroringSupported)
+            Menu {
+                ForEach(HardwareButton.menu, id: \.self) { button in
+                    Button { viewer.press(button) } label: { Label(button.title, systemImage: button.symbol) }
+                }
+            } label: {
+                Label("Buttons", systemImage: "button.vertical.left.press")
+            }
+            .help("Press the iPhone's side and volume buttons")
+            .disabled(session.state != .running || !mirroringSupported)
             Button { viewer.pasteFromMac() } label: { Label("Paste from Mac", systemImage: "doc.on.clipboard") }
                 .help("Paste the Mac clipboard (text or image) into the iPhone's focused field")
                 .disabled(session.state != .running || !mirroringSupported)
@@ -186,16 +197,6 @@ struct MirrorWindowView: View {
             .help("Draw the passcode keypad over the screen: iOS hides it from mirroring, but taps on it work. "
                   + "Drag ⇕ on the right edge to line it up.")
             .disabled(session.state != .running || !mirroringSupported)
-            Button { viewer.deviceOnly.toggle() } label: {
-                Label(viewer.deviceOnly ? "Show controls" : "iPhone only",
-                      systemImage: viewer.deviceOnly ? "slider.horizontal.3" : "iphone")
-            }
-            .help(viewer.deviceOnly
-                  ? "Show the viewer controls: zoom, rotation, buttons, clipboard, accessibility"
-                  : "Show only the iPhone")
-            .disabled(!mirroringSupported)
-            Button { NSWorkspace.shared.open(session.browserURL) } label: { Label("Open in browser", systemImage: "safari") }
-                .disabled(session.state != .running)
         }
     }
 

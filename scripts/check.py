@@ -178,6 +178,9 @@ def static_checks() -> None:
         record("function fitCanvasToViewport" in js and "innerHeight - 150" in js,
                "viewer.js: fitCanvasToViewport riserva 150 px in altezza (modalità solo iPhone)",
                "cambiato: aggiorna VIEWER_RESERVED_H in layoutJS (WebView.swift)")
+        record('id="screenshot"' in html and "getElementById('screenshot').addEventListener('click', takeScreenshot)" in js,
+               "viewer: bottone #screenshot (Screenshot nella toolbar)",
+               "cambiato: aggiorna takeScreenshot in WebView.swift")
         record('id="brand-logo"' in html and 'id="brand"' in html,
                "viewer.html ha #brand-logo e #brand (nascosti dall'app)",
                "id cambiati: il logo di pymobiledevice3 ricomparirebbe, aggiorna layoutJS in WebView.swift")
@@ -185,6 +188,10 @@ def static_checks() -> None:
         record(False, "risorse del viewer", str(e))
     root = Path(importlib.import_module("pymobiledevice3").__file__).parent
     stream_src = (root / "remote" / "core_device" / "screen_stream.py").read_text(errors="ignore")
+    buttons = ["home", "lock", "volume-up", "volume-down", "mute", "siri"]
+    missing = [b for b in buttons if f'    "{b}": (' not in stream_src]
+    record(not missing, "serve-web: nomi dei bottoni fisici per /button (menu Buttons)",
+           f"mancanti: {', '.join(missing)}: aggiorna HardwareButton (HardwareButton.swift)")
     routes = ['"/clipboard"', '"/clipboard/image"', '"/key"', "_CLIPBOARD_MAX_BODY = 32 * 1024 * 1024"]
     missing = [r for r in routes if r not in stream_src]
     record(not missing, "serve-web: /clipboard, /clipboard/image, /key e limite 32 MB (Paste from Mac)",

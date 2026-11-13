@@ -11,8 +11,8 @@ Built on [pymobiledevice3](https://github.com/doronz88/pymobiledevice3), which s
 
 ### See and use the iPhone
 
-- Mirror the screen in a window, with sound, touch, keyboard and buttons. Several iPhones at once,
-  or all of them side by side in a grid.
+- Mirror the screen in a window, with sound, touch, keyboard and the iPhone's buttons (Home, Lock,
+  volume, mute, Siri). Several iPhones at once, or all of them side by side in a grid.
 - Record the screen with audio, take screenshots.
 - Paste from Mac: what you copied on the Mac (text or an image) lands in the iPhone's focused field.
 - Show or hide the window with **⌥⌘M**.

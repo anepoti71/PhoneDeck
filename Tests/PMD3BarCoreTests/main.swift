@@ -440,6 +440,15 @@ suite("MacPaste") {
     check(MacPaste.commandVReports == [[0xE3], [0xE3, 0x19], [0xE3], []], "⌘V key reports")
 }
 
+suite("HardwareButton") {
+    // Names the viewer's POST /button accepts (_NAMED_BUTTONS in screen_stream.py).
+    check(HardwareButton.allCases.map(\.rawValue) == ["home", "lock", "volume-up", "volume-down", "mute", "siri"],
+          "server button names")
+    check(HardwareButton.menu == [.lock, .volumeUp, .volumeDown, .mute, .siri], "menu: every button but Home")
+    check(HardwareButton.allCases.allSatisfy { !$0.title.isEmpty && !$0.symbol.isEmpty }, "title and symbol")
+    check(Set(HardwareButton.allCases.map(\.title)).count == HardwareButton.allCases.count, "distinct titles")
+}
+
 print("\n\(passed) checks passed, \(failures.count) failed")
 for f in failures { print("  ✗ \(f)") }
 exit(failures.isEmpty ? 0 : 1)
