@@ -8,21 +8,23 @@ struct MenuView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             deviceSection
-            if model.selectedDevice != nil {
-                Divider()
-                mountSection
-            }
             Divider()
             footer
         }
         .padding(14)
-        .frame(width: 350)
+        .frame(width: 360)
         // The first focusable control got keyboard focus when the menu opened, and a blue ring
         // around it (the Settings header, then the device row).
         .focusEffectDisabled()
+        // Each row shows its own Developer Disk Image: check the iPhones never checked yet.
+        .task {
+            for device in model.devices where device.reachable && model.mountStates[device.id] == nil {
+                await model.refreshMount(device.id)
+            }
+        }
     }
 
-    // MARK: Sections
+    // MARK: Devices
 
     @ViewBuilder private var deviceSection: some View {
         if PMD3.python == nil {
@@ -31,10 +33,17 @@ struct MenuView: View {
         } else if model.devices.isEmpty {
             noDevice
         } else {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Devices (\(model.devices.count))").font(.caption).foregroundStyle(.secondary)
-                ForEach(model.devices) { device in
-                    row(device)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Devices (\(model.devices.count))")
+                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    .padding(.leading, 4)
+                GroupBox {
+                    VStack(spacing: 0) {
+                        ForEach(Array(model.devices.enumerated()), id: \.element.id) { index, device in
+                            if index > 0 { Divider().padding(.leading, 56).padding(.trailing, 8) }
+                            row(device)
+                        }
+                    }
                 }
             }
             HStack {
@@ -53,12 +62,17 @@ struct MenuView: View {
     private var noDevice: some View {
         let hint = model.deviceError
             ?? "Connect the iPhone via USB (the first time the cable is needed for pairing) or unlock it on the same Wi-Fi network."
-        return HStack(spacing: 10) {
-            Image(systemName: "iphone.slash").font(.title2).foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("No devices").font(.headline)
-                Text(hint).font(.caption).foregroundStyle(.secondary)
+        return GroupBox {
+            HStack(spacing: 10) {
+                Image(systemName: "iphone.slash").font(.title2).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("No devices").font(.headline)
+                    Text(hint).font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
             }
+            .padding(8)
         }
     }
 
@@ -68,51 +82,16 @@ struct MenuView: View {
             device: device,
             selected: udid == model.selectedUDID,
             mirror: model.sessions[udid],
+            mountState: model.mountStates[udid] ?? .unknown,
             select: { model.select(udid) },
             openWindow: { MirrorWindows.shared.show(udid) },
             stop: { model.stopMirroring(udid) },
+            mount: { Task { await model.mount(udid) } },
             power: { model.confirmPower($0, udid: udid) }
         )
     }
 
-    @ViewBuilder private var mountSection: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Developer Disk Image · \(model.selectedDevice?.name ?? "")")
-                    .font(.subheadline.weight(.semibold)).lineLimit(1)
-                mountStatus
-            }
-            Spacer()
-            mountButton
-        }
-        if model.mountState == .notMounted {
-            Text("Needed for mirroring, simulated location and launching apps.")
-                .font(.caption).foregroundStyle(.secondary)
-        }
-    }
-
-    @ViewBuilder private var mountButton: some View {
-        switch model.mountState {
-        case .mounting, .checking:
-            ProgressView().controlSize(.small)
-        case .mounted:
-            EmptyView()
-        default:
-            Button("Mount") { Task { await model.mount() } }
-                .disabled(model.selectedDevice?.reachable != true)
-        }
-    }
-
-    @ViewBuilder private var mountStatus: some View {
-        switch model.mountState {
-        case .unknown: status("—", .secondary)
-        case .checking: status("Checking…", .secondary)
-        case .mounted: status("Mounted", .green)
-        case .notMounted: status("Not mounted", .orange)
-        case .mounting: status("Mounting…", .secondary)
-        case .failed(let msg): status(msg, .red)
-        }
-    }
+    // MARK: Settings
 
     @AppStorage("settingsExpanded") private var settingsExpanded = false
 
@@ -139,7 +118,10 @@ struct MenuView: View {
             .accessibilityLabel("Settings")
             .accessibilityValue(settingsExpanded ? "expanded" : "collapsed")
 
-            if settingsExpanded { settingsContent }
+            if settingsExpanded {
+                GroupBox { settingsContent }
+                    .padding(.top, 8)
+            }
         }
         .font(.caption)
     }
@@ -166,14 +148,16 @@ struct MenuView: View {
         }
         .toggleStyle(.checkbox)
         .font(.caption)
-        .padding(.top, 6)
-        .padding(.leading, 18)
+        .padding(4)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
+
+    // MARK: Footer
 
     @State private var refreshing = false
 
     private var footer: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
             settings
             HStack(spacing: 2) {
                 Text("pymobiledevice3 \(model.pmd3Version)")
@@ -183,11 +167,13 @@ struct MenuView: View {
                     if refreshing {
                         ProgressView().controlSize(.mini).frame(width: 22, height: 18)
                     } else {
-                        FooterButton(icon: "arrow.clockwise", help: "Refresh devices and Developer Disk Image") {
+                        FooterButton(icon: "arrow.clockwise", help: "Refresh devices and Developer Disk Images") {
                             refreshing = true
                             Task {
                                 await model.refreshDevices()
-                                await model.refreshMount()
+                                for device in model.devices where device.reachable {
+                                    await model.refreshMount(device.id)
+                                }
                                 refreshing = false
                             }
                         }
@@ -213,38 +199,34 @@ struct MenuView: View {
             }
         }
     }
-
-    private func status(_ text: String, _ color: Color) -> some View {
-        HStack(spacing: 5) {
-            Circle().fill(color).frame(width: 7, height: 7)
-            Text(text).font(.caption).foregroundStyle(.secondary).lineLimit(3)
-        }
-    }
 }
 
-/// One device in the menu: click to select it (the Developer Disk Image section follows the selection);
-/// the button on the right starts its mirroring in its own window.
+/// One device in the menu, with its own Developer Disk Image on the line below: click to select it;
+/// the buttons on the right start its mirroring in its own window.
 struct DeviceRow: View {
     let device: Device
     let selected: Bool
     let mirror: MirrorSession?
+    let mountState: MountState
     let select: () -> Void
     let openWindow: () -> Void
     let stop: () -> Void
+    let mount: () -> Void
     let power: (DeviceTools.PowerAction) -> Void
     @State private var hovering = false
 
     private var mirrorState: MirrorState { mirror?.state ?? .stopped }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(alignment: .top, spacing: 8) {
             Button(action: select) { label }
                 .buttonStyle(.plain)
-            mirrorButtons
+            HStack(spacing: 6) { mirrorButtons }
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 6)
-        .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? Color.primary.opacity(0.08) : .clear))
+        .padding(.vertical, 7)
+        .padding(.horizontal, 8)
+        .background(RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .fill(hovering ? Color.primary.opacity(0.06) : .clear))
         .onHover { hovering = $0 }
         .contextMenu {
             if device.reachable {
@@ -257,18 +239,21 @@ struct DeviceRow: View {
     private var label: some View {
         let detailStyle: AnyShapeStyle = device.reachable ? AnyShapeStyle(.secondary) : AnyShapeStyle(.orange)
         let linkIcon = device.hasUSB ? "cable.connector" : (device.reachable ? "wifi" : "wifi.slash")
-        return HStack(spacing: 8) {
+        return HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: selected ? "largecircle.fill.circle" : "circle")
                 .foregroundStyle(selected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
             Image(systemName: linkIcon)
                 .frame(width: 16)
                 .foregroundStyle(device.reachable ? AnyShapeStyle(.primary) : AnyShapeStyle(.orange))
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(device.name).font(.body.weight(selected ? .semibold : .regular)).lineLimit(1)
                 Text(subtitle).font(.caption).foregroundStyle(detailStyle).lineLimit(2)
                 if let err = device.unreachableError {
                     Text("Unlock the iPhone and check the Wi-Fi network (\(err))")
                         .font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+                }
+                if device.reachable && mountState != .unknown {
+                    diskImage.padding(.top, 1)
                 }
             }
             Spacer(minLength: 4)
@@ -285,6 +270,36 @@ struct DeviceRow: View {
         default: break
         }
         return s
+    }
+
+    /// This iPhone's Developer Disk Image: a status dot, and Mount when it is missing.
+    private var diskImage: some View {
+        HStack(spacing: 6) {
+            switch mountState {
+            case .unknown, .checking: diskStatus("Disk Image: checking…", .secondary)
+            case .mounted: diskStatus("Disk Image mounted", .green)
+            case .notMounted: diskStatus("Disk Image not mounted", .orange)
+            case .mounting: diskStatus("Disk Image mounting…", .secondary)
+            case .failed(let msg): diskStatus("Disk Image: \(msg)", .red)
+            }
+            switch mountState {
+            case .notMounted, .failed:
+                Button("Mount", action: mount)
+                    .controlSize(.mini)
+                    .help("Needed for mirroring, simulated location and launching apps")
+            case .checking, .mounting:
+                ProgressView().controlSize(.mini)
+            default:
+                EmptyView()
+            }
+        }
+    }
+
+    private func diskStatus(_ text: String, _ color: Color) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(color).frame(width: 6, height: 6)
+            Text(text).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+        }
     }
 
     @ViewBuilder private var mirrorButtons: some View {
