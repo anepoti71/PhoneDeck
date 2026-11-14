@@ -136,11 +136,16 @@ final class ViewerController {
     /// Presses one of the iPhone's physical buttons through the viewer server.
     func press(_ button: HardwareButton) {
         let js = """
-        const r = await fetch('/button', {method: 'POST', headers: {'Content-Type': 'application/json'},
-                                          body: JSON.stringify({name, state: 'press'})});
-        return r.ok ? '' : 'HTTP ' + r.status;
+        const send = state => fetch('/button', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                                body: JSON.stringify({name, state})});
+        const down = await send('down');
+        if (!down.ok) return 'HTTP ' + down.status;
+        await new Promise(done => setTimeout(done, hold * 1000));
+        const up = await send('up');
+        return up.ok ? '' : 'HTTP ' + up.status;
         """
-        webView?.callAsyncJavaScript(js, arguments: ["name": button.rawValue], in: nil, in: .page) { [weak self] result in
+        webView?.callAsyncJavaScript(js, arguments: ["name": button.serverName, "hold": button.hold],
+                                     in: nil, in: .page) { [weak self] result in
             MainActor.assumeIsolated {
                 let problem: String?
                 switch result {

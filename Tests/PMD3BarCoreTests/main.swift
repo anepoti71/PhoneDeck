@@ -444,6 +444,8 @@ suite("HardwareButton") {
     // Names the viewer's POST /button accepts (_NAMED_BUTTONS in screen_stream.py).
     check(HardwareButton.allCases.map(\.rawValue) == ["home", "lock", "volume-up", "volume-down", "mute", "siri"],
           "server button names")
+    check(HardwareButton.siri.serverName == "lock", "Siri is a long hold of the side button")
+    check(HardwareButton.siri.hold > 1.0 && HardwareButton.lock.hold < 0.3, "Lock taps, Siri holds")
     check(HardwareButton.menu == [.lock, .volumeUp, .volumeDown, .mute, .siri], "menu: every button but Home")
     check(HardwareButton.allCases.allSatisfy { !$0.title.isEmpty && !$0.symbol.isEmpty }, "title and symbol")
     check(Set(HardwareButton.allCases.map(\.title)).count == HardwareButton.allCases.count, "distinct titles")
